@@ -13,4 +13,5 @@ void System::init() {
     Serial.println("System init...");
     wifi.connect();
     wsmgr.init();
+    wsmgr.startTask();
 }

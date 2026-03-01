@@ -51,9 +51,8 @@ void setup() {
     Motor::init();
 
     // startMotorTask();
-    // startWebSocketTask();
     // startAudioTask();
-
+    delay(2000);
     Serial.println("Robot RTOS Ready");
 }
 
@@ -65,7 +64,7 @@ void loop() {
         last = millis();
     }
 
-    delay(10);
+    delay(500);
    // vTaskDelay(1);
 }
 

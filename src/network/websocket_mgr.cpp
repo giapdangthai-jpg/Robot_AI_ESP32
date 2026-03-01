@@ -27,13 +27,11 @@ static WebSocketMgr* g_instance = nullptr;
 
 void WebSocketMgr::init() {
     g_instance = this;
-    _sendQueue = xQueueCreate(WS_QUEUE_LEN, sizeof(WsMessage));
     
     _ws.begin(WS_SERVER, WS_PORT, WS_PATH);
     _ws.onEvent(webSocketEvent);
     _ws.setReconnectInterval(RECONNECT_INTERVAL);
     _ws.enableHeartbeat(30000, 5000, 2);
-    startTask();
     Serial.println("[WS] Initializing WebSocket client...");
 }
 
@@ -86,7 +84,7 @@ bool WebSocketMgr::sendText(const char* text)
 void WebSocketMgr::startTask()
 {
     Serial.println("[WS] startTask ");
-
+    _sendQueue = xQueueCreate(WS_QUEUE_LEN, sizeof(WsMessage));
     xTaskCreatePinnedToCore(
         task,
         "ws_task",
