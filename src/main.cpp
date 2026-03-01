@@ -35,27 +35,37 @@
 #include "core/system.h"
 #include "core/event_bus.h"
 #include "motor/motor.h"
-#include "network/websocket.h"
+#include "network/websocket_mgr.h"
 
-void startMotorTask();
-void startWebSocketTask();
-void startAudioTask();
+
+// void startMotorTask();
+// void startWebSocketTask();
+// void startAudioTask();
+
+extern WebSocketMgr wsmgr;
 
 void setup() {
 
     System::init();
-    WebSocketClient::init();
     EventBus::init();
     Motor::init();
 
-    startMotorTask();
-    startWebSocketTask();
-    startAudioTask();
+    // startMotorTask();
+    // startWebSocketTask();
+    // startAudioTask();
 
     Serial.println("Robot RTOS Ready");
 }
 
 void loop() {
-    WebSocketClient::loop();
-    vTaskDelay(1000);
+    static unsigned long last = 0;
+    if (millis() - last > 5000)
+    {
+        wsmgr.sendText("Hello from ESP");
+        last = millis();
+    }
+
+    delay(10);
+   // vTaskDelay(1);
 }
+

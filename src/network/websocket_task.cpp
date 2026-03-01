@@ -1,4 +1,4 @@
-#include "websocket.h"
+#include "websocket_mgr.h"
 #include "../core/event_bus.h"
 #include "../core/event.h"
 #include <WebSocketsClient.h>
@@ -19,25 +19,3 @@ static void onMessage(WStype_t type, uint8_t* payload, size_t length) {
     }
 }
 
-static void wsTask(void* pv) {
-
-    ws.begin("192.168.100.170", 8000, "/ws/public");
-    ws.onEvent(onMessage);
-
-    while (true) {
-        ws.loop();
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
-}
-
-void startWebSocketTask() {
-    xTaskCreatePinnedToCore(
-        wsTask,
-        "wsTask",
-        8192,
-        NULL,
-        1,
-        NULL,
-        0
-    );
-}
