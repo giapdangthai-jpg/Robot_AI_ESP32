@@ -81,3 +81,134 @@ command_parser.cpp
 🔹 utils/
 
 👉 Debug, log, buffer
+
+--------------------------------------------------------------------------
+I. KIẾN TRÚC THEO TẦNG (Layered Architecture)
+1️⃣ Hardware Layer
+
+I2S mic
+
+I2S DAC
+
+Motor driver
+
+WiFi chip
+
+2️⃣ Driver / Utils Layer
+utils/
+ ├── ringbuffer
+ ├── audio_buffer
+ ├── logger
+
+
+Chức năng:
+
+Không chứa business logic
+
+Chỉ cung cấp công cụ nền
+
+3️⃣ Core Layer (Trái tim hệ thống)
+core/
+ ├── event_bus
+ ├── state
+ ├── system
+
+🔥 Vai trò cực kỳ quan trọng
+Module	Vai trò
+event_bus	Giao tiếp giữa các module
+state	Quản lý trạng thái robot
+system	Khởi tạo toàn bộ
+
+👉 Đây là trung tâm điều phối.
+
+4️⃣ Network Layer
+network/
+ ├── wifi_mgr
+ ├── websocket
+ ├── websocket_task
+ ├── ws_stream_task
+
+Phân tầng nội bộ
+wifi_mgr        → quản lý WiFi
+websocket       → API WebSocket
+websocket_task  → FreeRTOS xử lý message
+ws_stream_task  → streaming audio
+
+5️⃣ AI Layer
+ai/
+ ├── ai_bridge
+ ├── command_parser
+
+Flow:
+WebSocket → ai_bridge → command_parser → event_bus
+
+
+Ví dụ:
+
+{ "type": "answer", "text": "Turn left" }
+
+
+↓
+
+command_parser.parse()
+
+
+↓
+
+event_bus.publish(MOTOR_LEFT)
+
+
+↓
+
+motor chạy
+
+6️⃣ Application Layer (Main)
+main.cpp
+
+
+Chỉ làm:
+
+system.init();
+
+
+Không chứa logic.
+
+🔁 III. DATA FLOW TOÀN HỆ THỐNG
+🎤 Khi có mic
+Mic → audio_buffer → ws_stream_task → PC (Whisper)
+PC → LLM → TTS → trả audio
+ESP → audio_player → loa
+
+📝 Khi gửi text (hiện tại)
+ESP sendAsk()
+↓
+websocket_task
+↓
+PC LLM
+↓
+websocket trả answer
+↓
+ai_bridge
+↓
+command_parser
+↓
+event_bus
+↓
+motor / speaker
+
+🧠 IV. FreeRTOS Task Architecture
+
+Tôi đề xuất:
+
+TaskWiFi
+TaskWebSocket
+TaskStream
+TaskAI
+TaskMotor
+
+
+Mỗi task giao tiếp bằng:
+
+event_bus
+queue
+ringbuffer

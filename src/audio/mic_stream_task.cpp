@@ -24,3 +24,4 @@ static void micTask(void* pv) {
         }
     }
 }
+

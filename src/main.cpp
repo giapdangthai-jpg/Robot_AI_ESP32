@@ -35,6 +35,7 @@
 #include "core/system.h"
 #include "core/event_bus.h"
 #include "motor/motor.h"
+#include "network/websocket.h"
 
 void startMotorTask();
 void startWebSocketTask();
@@ -43,6 +44,7 @@ void startAudioTask();
 void setup() {
 
     System::init();
+    WebSocketClient::init();
     EventBus::init();
     Motor::init();
 
@@ -54,5 +56,6 @@ void setup() {
 }
 
 void loop() {
+    WebSocketClient::loop();
     vTaskDelay(1000);
 }

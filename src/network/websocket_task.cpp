@@ -21,7 +21,7 @@ static void onMessage(WStype_t type, uint8_t* payload, size_t length) {
 
 static void wsTask(void* pv) {
 
-    ws.begin("192.168.1.100", 8080, "/");
+    ws.begin("192.168.100.170", 8000, "/ws/public");
     ws.onEvent(onMessage);
 
     while (true) {

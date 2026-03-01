@@ -1,6 +1,7 @@
 #include <WebSocketsClient.h>
 #include "../utils/audio_buffer.h"
 #include "../config/pinmap.h"
+#include "websocket_mgr.h"
 
 static WebSocketsClient ws;
 static bool connected = false;
@@ -20,9 +21,9 @@ static void wsTask(void* pv) {
 
     int16_t frame[AUDIO_FRAME_SAMPLES];
 
-    ws.begin("192.168.1.100", 8080, "/audio");
-    ws.onEvent(onEvent);
-    ws.setReconnectInterval(2000);
+    // ws.begin(WebSocketClient::getServer(), WebSocketClient::getPort(), "/audio");
+    // ws.onEvent(onEvent);
+    // ws.setReconnectInterval(2000);
 
     while (true) {
 
