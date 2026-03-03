@@ -5,14 +5,15 @@
 
 class AudioBuffer {
 public:
-    void init();
+    bool init(size_t capacitySamples = 8192, bool preferPsram = false);
     void clear();
     bool push(const int16_t* data, size_t samples);
     bool pop(int16_t* data, size_t samples);
 
 private:
-    static constexpr size_t kCapacity = 8192;
-    int16_t _buf[kCapacity];
+    int16_t* _buf = nullptr;
+    size_t _capacity = 0;
+    bool _usingPsram = false;
     size_t _writeIdx = 0;
     size_t _readIdx  = 0;
     size_t _count    = 0;

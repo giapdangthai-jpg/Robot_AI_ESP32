@@ -36,7 +36,9 @@ static unsigned long g_lastAudioDropLogMs = 0;
 void WebSocketMgr::init() {
     g_instance = this;
 
-    g_spkBuf.init();
+    if (!g_spkBuf.init(32768, true)) {
+        Serial.println("[WS] Failed to init speaker buffer");
+    }
     _ws.begin(WS_SERVER, WS_PORT, WS_PATH);
     _ws.onEvent(webSocketEvent);
     _ws.setReconnectInterval(RECONNECT_INTERVAL);
@@ -197,6 +199,7 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
     }
 
     String deviceInfo = "{\"type\":\"device_info\",\"name\":\"RobotAI_ESP32\"}";
+    static unsigned long totalLen = 0;
     
     switch (type) {
         case WStype_DISCONNECTED:
@@ -224,13 +227,24 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
         case WStype_TEXT:
             {
                 g_instance->_connected = true;
-                JsonDocument doc;   // sửa luôn deprecated
+                JsonDocument doc;
                 DeserializationError err = deserializeJson(doc, payload);
 
-                if (!err)
-                {
-                    const char* answer = doc["text"];
+                if (err) {
+                    Serial.printf("[WS] JSON parse error: %s\n", err.c_str());
+                    break;
+                }
+
+                const char* answer = nullptr;
+                if (doc["text"].is<const char*>()) {
+                    answer = doc["text"].as<const char*>();
+                }
+
+                if (answer && answer[0] != '\0') {
                     AiBridge::handleAnswer(answer);
+                } else {
+                    const char* msgType = doc["type"].is<const char*>() ? doc["type"].as<const char*>() : "unknown";
+                    Serial.printf("[WS] Ignore text frame without usable 'text' (type=%s)\n", msgType);
                 }
             }
             break;
@@ -245,7 +259,8 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
             
         case WStype_BIN:
             {
-                Serial.printf("[WS] Binary audio received: %u bytes\n", length);
+                totalLen += length;
+                Serial.printf("[WS] Binary audio received: %u bytes\n", totalLen);
                 if (length % 2 != 0) {
                     Serial.println("[WS] ERROR: Binary data length must be even");
                     break;

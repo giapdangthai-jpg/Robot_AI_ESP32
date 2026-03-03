@@ -17,7 +17,9 @@ void System::init() {
     Serial.begin(DEBUG_BAUD);
     delay(500);
     Serial.println("System init...");
-    g_micBuf.init();
+    if (!g_micBuf.init(8192, false)) {
+        Serial.println("[SYS] Failed to init mic buffer");
+    }
     MicI2S::init();
     SpeakerI2S::init();
     wifi.connect();
