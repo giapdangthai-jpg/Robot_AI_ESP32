@@ -25,3 +25,20 @@ void SpeakerI2S::init() {
     i2s_driver_install(I2S_NUM_1, &config, 0, NULL);
     i2s_set_pin(I2S_NUM_1, &pin_config);
 }
+
+bool SpeakerI2S::write(const int16_t* samples, size_t bytes) {
+    if (samples == nullptr || bytes == 0) {
+        return false;
+    }
+
+    size_t written = 0;
+    esp_err_t err = i2s_write(
+        I2S_NUM_1,
+        samples,
+        bytes,
+        &written,
+        portMAX_DELAY
+    );
+
+    return (err == ESP_OK) && (written == bytes);
+}

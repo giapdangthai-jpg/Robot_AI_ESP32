@@ -57,14 +57,23 @@ void setup() {
 }
 
 void loop() {
-    static unsigned long last = 0;
-    if (millis() - last > 5000)
+    static unsigned long lastText = 0;
+    static bool sentHelloAudio = false;
+
+    // if (millis() - lastText > 15000)
+    // {
+    //     wsmgr.sendText("Hello from ESP");
+    //     lastText = millis();
+    // }
+    delay(2000);
+
+    if (!sentHelloAudio && wsmgr.isConnected())
     {
-        wsmgr.sendText("Hello from ESP");
-        last = millis();
+        bool ok = wsmgr.sendHelloFromGabiAudio();
+        Serial.println(ok ? "[APP] Hello from gabi audio sent" : "[APP] Hello from gabi audio failed");
+        sentHelloAudio = ok;
     }
 
-    delay(500);
+    delay(200);
    // vTaskDelay(1);
 }
-

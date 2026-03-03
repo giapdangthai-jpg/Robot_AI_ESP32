@@ -3,6 +3,9 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "../ai/ai_bridge.h"
+#include "../utils/audio_buffer.h"
+#include "../config/pinmap.h"
+#include "../test/hello_from_gabi_pcm.h"
 
 extern "C" {
     #include "freertos/FreeRTOS.h"
@@ -12,22 +15,28 @@ extern "C" {
 
 #define WS_STACK_SIZE 8192
 #define WS_QUEUE_LEN  10
-#define WS_MSG_SIZE   256
-typedef struct
-{
-    char data[WS_MSG_SIZE];
+#define WS_MSG_SIZE   768
+#define WS_QUEUE_SEND_WAIT_MS 30
+enum class WsMsgType : uint8_t {
+    TEXT = 0,
+    BINARY = 1
+};
+
+typedef struct {
+    WsMsgType type;
+    size_t len;
+    uint8_t data[WS_MSG_SIZE];
 } WsMessage;
 
 static WebSocketMgr* g_instance = nullptr;
-// static WebSocketsClient ws;
-
-// Static member definitions
-//std::function<void(String)> WebSocketMgr::_messageCallback = nullptr;
-//unsigned long WebSocketMgr::_lastConnectAttempt = 0;
-
+static uint32_t g_audioFramesRx = 0;
+static uint32_t g_audioFramesDropped = 0;
+static uint32_t g_audioSamplesDropped = 0;
+static unsigned long g_lastAudioDropLogMs = 0;
 void WebSocketMgr::init() {
     g_instance = this;
-    
+
+    g_spkBuf.init();
     _ws.begin(WS_SERVER, WS_PORT, WS_PATH);
     _ws.onEvent(webSocketEvent);
     _ws.setReconnectInterval(RECONNECT_INTERVAL);
@@ -64,21 +73,75 @@ bool WebSocketMgr::sendMessage(const char* message) {
 
 bool WebSocketMgr::sendText(const char* text)
 {
-    Serial.println("[WS] Sendtext ");
-
-    if (!isConnected() || !_sendQueue) {
+    if (!text || !isConnected() || !_sendQueue) {
         Serial.println("[WS] Cannot send message - not connected");
         return false;
     }
 
     WsMessage msg;
     memset(&msg, 0, sizeof(msg));
-    strncpy(msg.data, text, WS_MSG_SIZE - 1);
-    BaseType_t ok = xQueueSend(_sendQueue, &msg, 0);
+    msg.type = WsMsgType::TEXT;
+    strncpy((char*)msg.data, text, WS_MSG_SIZE - 1);
+    msg.len = strlen((const char*)msg.data);
+    BaseType_t ok = xQueueSend(_sendQueue, &msg, pdMS_TO_TICKS(WS_QUEUE_SEND_WAIT_MS));
 
     return ok == pdTRUE;
-    // Serial.println(result ? "[WS] Sent Text Sucess: " : "[WS] Sent Text failed: ");
-    // return result;
+}
+
+bool WebSocketMgr::sendBinary(const uint8_t* data, size_t len)
+{
+    if (!data || len == 0 || len > WS_MSG_SIZE || !isConnected() || !_sendQueue) {
+        return false;
+    }
+
+    WsMessage msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.type = WsMsgType::BINARY;
+    msg.len = len;
+    memcpy(msg.data, data, len);
+    BaseType_t ok = xQueueSend(_sendQueue, &msg, pdMS_TO_TICKS(WS_QUEUE_SEND_WAIT_MS));
+    return ok == pdTRUE;
+}
+
+bool WebSocketMgr::sendHelloFromGabiAudio()
+{
+    if (!isConnected() || !_sendQueue) {
+        return false;
+    }
+
+    size_t offset = 0;
+    unsigned long startMs = millis();
+    const unsigned long kTimeoutMs = 8000;
+
+    while (offset < HELLO_FROM_GABI_PCM_LEN) {
+        size_t chunk = HELLO_FROM_GABI_PCM_LEN - offset;
+        if (chunk > AUDIO_FRAME_BYTES) {
+            chunk = AUDIO_FRAME_BYTES;
+        }
+
+        if (sendBinary(HELLO_FROM_GABI_PCM + offset, chunk)) {
+            offset += chunk;
+            continue;
+        }
+
+        if (millis() - startMs > kTimeoutMs) {
+            Serial.println("[WS][AUDIO] sendHelloFromGabiAudio timeout");
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    unsigned long endStartMs = millis();
+    while (!sendText("{\"type\":\"audio_end\"}")) {
+        if (millis() - endStartMs > kTimeoutMs) {
+            Serial.println("[WS][AUDIO] failed to queue audio_end");
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+
+    Serial.printf("[WS][AUDIO] hello_from_gabi queued bytes=%u\n", (unsigned)HELLO_FROM_GABI_PCM_LEN);
+    return true;
 }
 
 void WebSocketMgr::startTask()
@@ -114,33 +177,48 @@ void WebSocketMgr::handleSendQueue()
     if (!_connected)
         return;
 
-    char buffer[WS_MSG_SIZE];
     WsMessage msg;
     while (xQueueReceive(_sendQueue, &msg, 0) == pdTRUE)
     {
-        Serial.println("[WS] handleSendQueue - while");
-
-        bool ok = _ws.sendTXT(msg.data);
-        Serial.println(ok ? "[WS] Send OK" : "[WS] Send FAIL");
+        bool ok = false;
+        if (msg.type == WsMsgType::TEXT) {
+            ok = _ws.sendTXT((const char*)msg.data, msg.len);
+        } else if (msg.type == WsMsgType::BINARY) {
+            ok = _ws.sendBIN(msg.data, msg.len);
+        }
+        if (!ok) {
+            Serial.println("[WS] Send FAIL");
+        }
     }
 }
 void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
+    if (g_instance == nullptr) {
+        return;
+    }
+
     String deviceInfo = "{\"type\":\"device_info\",\"name\":\"RobotAI_ESP32\"}";
     
     switch (type) {
         case WStype_DISCONNECTED:
             g_instance->_connected = false;
+            g_spkBuf.clear();
+            g_audioFramesRx = 0;
+            g_audioFramesDropped = 0;
+            g_audioSamplesDropped = 0;
+            g_lastAudioDropLogMs = 0;
             Serial.println("[WS] Disconnected!");
             break;
             
         case WStype_CONNECTED:
             g_instance->_connected = true;
+            g_spkBuf.clear();
+            g_audioFramesRx = 0;
+            g_audioFramesDropped = 0;
+            g_audioSamplesDropped = 0;
+            g_lastAudioDropLogMs = 0;
             Serial.println("[WS] Connected!");
             delay(1);
-            if (g_instance != nullptr)
-                {
-                    g_instance->_ws.sendTXT(deviceInfo);
-                }
+            g_instance->_ws.sendTXT(deviceInfo);
             break;
             
         case WStype_TEXT:
@@ -164,11 +242,35 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
         case WStype_PONG:
             Serial.println("[WS] Pong");
             break;
-
             
         case WStype_BIN:
-            Serial.printf("[WS] Binary received: %u bytes\n", length);
-            Serial.printf("[WS] BIN first byte: %d\n", payload[0]);
+            {
+                Serial.printf("[WS] Binary audio received: %u bytes\n", length);
+                if (length % 2 != 0) {
+                    Serial.println("[WS] ERROR: Binary data length must be even");
+                    break;
+                }
+
+                size_t samples = length / 2;
+                int16_t* audioData = (int16_t*)payload;
+                g_audioFramesRx++;
+
+                if (!g_spkBuf.push(audioData, samples)) {
+                    g_audioFramesDropped++;
+                    g_audioSamplesDropped += samples;
+
+                    unsigned long now = millis();
+                    if (now - g_lastAudioDropLogMs >= 2000) {
+                        g_lastAudioDropLogMs = now;
+                        Serial.printf(
+                            "[WS][AUDIO] drop frames=%lu/%lu samples=%lu\n",
+                            (unsigned long)g_audioFramesDropped,
+                            (unsigned long)g_audioFramesRx,
+                            (unsigned long)g_audioSamplesDropped
+                        );
+                    }
+                }
+            }
             break;
 
         case WStype_ERROR:

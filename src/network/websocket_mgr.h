@@ -10,6 +10,8 @@ public:
     bool isConnected();
     bool sendMessage(const char* message);
     bool sendText(const char* text);
+    bool sendHelloFromGabiAudio();
+    bool sendBinary(const uint8_t* data, size_t len);
     void setEventCallback(std::function<void(String)> callback);
     void startTask();
     const char* getServer();

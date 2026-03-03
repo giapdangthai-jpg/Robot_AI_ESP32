@@ -1,43 +1,58 @@
 #include "audio_buffer.h"
 
-int16_t AudioBuffer::buffer[8192];
-size_t AudioBuffer::writeIndex = 0;
-size_t AudioBuffer::readIndex = 0;
-SemaphoreHandle_t AudioBuffer::mutex = nullptr;
+AudioBuffer g_micBuf;
+AudioBuffer g_spkBuf;
 
 void AudioBuffer::init() {
-    mutex = xSemaphoreCreateMutex();
+    _mutex = xSemaphoreCreateMutex();
+    _writeIdx = 0;
+    _readIdx  = 0;
+    _count    = 0;
 }
 
-bool AudioBuffer::push(int16_t* data, size_t samples) {
+void AudioBuffer::clear() {
+    if (!_mutex) return;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _writeIdx = 0;
+    _readIdx  = 0;
+    _count    = 0;
+    xSemaphoreGive(_mutex);
+}
 
-    if (!mutex) return false;
-    xSemaphoreTake(mutex, portMAX_DELAY);
+bool AudioBuffer::push(const int16_t* data, size_t samples) {
+    if (!_mutex || !data || samples == 0) return false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
 
-    for (size_t i = 0; i < samples; i++) {
-        buffer[writeIndex++] = data[i];
-        if (writeIndex >= 8192) writeIndex = 0;
+    if (samples > (kCapacity - _count)) {
+        xSemaphoreGive(_mutex);
+        return false;
     }
 
-    xSemaphoreGive(mutex);
+    for (size_t i = 0; i < samples; i++) {
+        _buf[_writeIdx++] = data[i];
+        if (_writeIdx >= kCapacity) _writeIdx = 0;
+    }
+    _count += samples;
+
+    xSemaphoreGive(_mutex);
     return true;
 }
 
 bool AudioBuffer::pop(int16_t* data, size_t samples) {
+    if (!_mutex || !data || samples == 0) return false;
+    xSemaphoreTake(_mutex, portMAX_DELAY);
 
-    if (!mutex) return false;
-    xSemaphoreTake(mutex, portMAX_DELAY);
-    
-    if (readIndex == writeIndex) {
-    xSemaphoreGive(mutex);
-    return false;
+    if (_count < samples) {
+        xSemaphoreGive(_mutex);
+        return false;
     }
 
     for (size_t i = 0; i < samples; i++) {
-        data[i] = buffer[readIndex++];
-        if (readIndex >= 8192) readIndex = 0;
+        data[i] = _buf[_readIdx++];
+        if (_readIdx >= kCapacity) _readIdx = 0;
     }
+    _count -= samples;
 
-    xSemaphoreGive(mutex);
+    xSemaphoreGive(_mutex);
     return true;
 }
