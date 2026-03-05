@@ -5,8 +5,8 @@
 
 class WebSocketMgr {
 public:
-     void init();
- void loop();
+    void init();
+    void loop();
     bool isConnected();
     bool sendMessage(const char* message);
     bool sendText(const char* text);
@@ -24,7 +24,8 @@ private:
     std::function<void(String)> _messageCallback = nullptr;
     static unsigned long _lastConnectAttempt;
     static const unsigned long RECONNECT_INTERVAL = 3000;
-    static constexpr const char* WS_SERVER = "192.168.100.170";
+    //static constexpr const char* WS_SERVER = "192.168.100.170";
+    static constexpr const char* WS_SERVER = "10.10.10.139"; //"192.168.100.170"
     static constexpr int WS_PORT = 8000;
     static constexpr const char* WS_PATH = "/ws/public";
 

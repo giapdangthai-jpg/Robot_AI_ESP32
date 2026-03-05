@@ -23,23 +23,32 @@
 #define I2S_SPK_DATA   9
 
 // =====================
-// DRV8833 Motor A
+// DRV8833 Motor Left
 // =====================
 #define M1_IN1  10
 #define M1_IN2  11
 
 // =====================
-// DRV8833 Motor B
+// DRV8833 Motor Right
 // =====================
 #define M2_IN1  12
 #define M2_IN2  13
+// =====================
+// DRV8833 Motor Back
+// =====================
+#define M3_IN1  14
+#define M3_IN2  15
 
+// Back angle (ADC)
 // =====================
-// Rear leg angle (ADC)
-// =====================
-#define REAR_LEG_ADC   1  // GPIO1 (ADC)
+#define BACK_ADC   1  // GPIO1 (ADC)
 
 // =====================
 // UART Debug
 // =====================
 #define DEBUG_BAUD 115200
+
+// =====================
+// RGB LED - WS2812
+// =====================
+#define RGB_PIN 48

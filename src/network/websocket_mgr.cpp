@@ -13,30 +13,38 @@ extern "C" {
     #include "freertos/queue.h"
 }
 
-#define WS_STACK_SIZE 8192
-#define WS_QUEUE_LEN  10
-#define WS_MSG_SIZE   768
-#define WS_QUEUE_SEND_WAIT_MS 30
+// Send queue: all WS writes go through a FreeRTOS queue so that
+// ISR/tasks on any core can enqueue safely without calling WebSocketsClient directly
+#define WS_STACK_SIZE         8192
+#define WS_QUEUE_LEN          10    // max messages waiting to be sent
+#define WS_MSG_SIZE           768   // max payload bytes per message (covers one audio frame)
+#define WS_QUEUE_SEND_WAIT_MS 30    // max time to wait for queue space before dropping
+
 enum class WsMsgType : uint8_t {
-    TEXT = 0,
+    TEXT   = 0,
     BINARY = 1
 };
 
 typedef struct {
     WsMsgType type;
-    size_t len;
-    uint8_t data[WS_MSG_SIZE];
+    size_t    len;
+    uint8_t   data[WS_MSG_SIZE];
 } WsMessage;
 
+// Singleton pointer used by the static webSocketEvent callback to reach the instance
 static WebSocketMgr* g_instance = nullptr;
 static uint32_t g_audioFramesRx = 0;
 static uint32_t g_audioFramesDropped = 0;
 static uint32_t g_audioSamplesDropped = 0;
+static uint32_t g_audioBytesRx = 0;
 static unsigned long g_lastAudioDropLogMs = 0;
+static unsigned long g_lastAudioRxLogMs = 0;
+// Initialize WebSocket client and speaker buffer (32768 samples in PSRAM)
+// Heartbeat: ping every 30s, pong timeout 5s, disconnect after 2 missed pongs
 void WebSocketMgr::init() {
     g_instance = this;
 
-    if (!g_spkBuf.init(32768, true)) {
+    if (!g_spkBuf.init(32768, true)) {  // large buffer in PSRAM to absorb TTS bursts
         Serial.println("[WS] Failed to init speaker buffer");
     }
     _ws.begin(WS_SERVER, WS_PORT, WS_PATH);
@@ -150,7 +158,12 @@ void WebSocketMgr::startTask()
 {
     Serial.println("[WS] startTask ");
     _sendQueue = xQueueCreate(WS_QUEUE_LEN, sizeof(WsMessage));
-    xTaskCreatePinnedToCore(
+    if (_sendQueue == nullptr) {
+        Serial.println("[WS] Failed to create send queue");
+        return;
+    }
+
+    BaseType_t ok = xTaskCreatePinnedToCore(
         task,
         "ws_task",
         WS_STACK_SIZE,
@@ -159,8 +172,12 @@ void WebSocketMgr::startTask()
         NULL,
         0
     );
+    if (ok != pdPASS) {
+        Serial.println("[WS] Failed to create ws_task");
+    }
 }
 
+// FreeRTOS task: runs WS library loop and drains the send queue every 10ms
 void WebSocketMgr::task(void* pv)
 {
     Serial.println("[WS] Task ");
@@ -174,9 +191,11 @@ void WebSocketMgr::task(void* pv)
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
+
+// Drain all pending messages from the send queue in a single pass
 void WebSocketMgr::handleSendQueue()
 {
-    if (!_connected)
+    if (!_connected || !_sendQueue)
         return;
 
     WsMessage msg;
@@ -193,13 +212,14 @@ void WebSocketMgr::handleSendQueue()
         }
     }
 }
+
+// Static callback registered with WebSocketsClient — routes events to the singleton instance
 void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     if (g_instance == nullptr) {
         return;
     }
 
     String deviceInfo = "{\"type\":\"device_info\",\"name\":\"RobotAI_ESP32\"}";
-    static unsigned long totalLen = 0;
     
     switch (type) {
         case WStype_DISCONNECTED:
@@ -208,40 +228,47 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
             g_audioFramesRx = 0;
             g_audioFramesDropped = 0;
             g_audioSamplesDropped = 0;
+            g_audioBytesRx = 0;
             g_lastAudioDropLogMs = 0;
+            g_lastAudioRxLogMs = 0;
             Serial.println("[WS] Disconnected!");
             break;
             
         case WStype_CONNECTED:
             g_instance->_connected = true;
-            g_spkBuf.clear();
+            g_spkBuf.clear();              // flush stale audio from previous session
             g_audioFramesRx = 0;
             g_audioFramesDropped = 0;
             g_audioSamplesDropped = 0;
+            g_audioBytesRx = 0;
             g_lastAudioDropLogMs = 0;
+            g_lastAudioRxLogMs = 0;
             Serial.println("[WS] Connected!");
             delay(1);
-            g_instance->_ws.sendTXT(deviceInfo);
+            g_instance->_ws.sendTXT(deviceInfo);  // announce device to server
             break;
             
         case WStype_TEXT:
             {
                 g_instance->_connected = true;
                 JsonDocument doc;
-                DeserializationError err = deserializeJson(doc, payload);
+                DeserializationError err = deserializeJson(doc, payload, length);
 
                 if (err) {
                     Serial.printf("[WS] JSON parse error: %s\n", err.c_str());
                     break;
                 }
 
-                const char* answer = nullptr;
-                if (doc["text"].is<const char*>()) {
+                const char* answer   = nullptr;
+                const char* userText = nullptr;
+
+                if (doc["text"].is<const char*>())
                     answer = doc["text"].as<const char*>();
-                }
+                if (doc["user_text"].is<const char*>())
+                    userText = doc["user_text"].as<const char*>();
 
                 if (answer && answer[0] != '\0') {
-                    AiBridge::handleAnswer(answer);
+                    AiBridge::handleAnswer(answer, userText);
                 } else {
                     const char* msgType = doc["type"].is<const char*>() ? doc["type"].as<const char*>() : "unknown";
                     Serial.printf("[WS] Ignore text frame without usable 'text' (type=%s)\n", msgType);
@@ -259,8 +286,7 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
             
         case WStype_BIN:
             {
-                totalLen += length;
-                Serial.printf("[WS] Binary audio received: %u bytes\n", totalLen);
+                // Incoming binary = raw 16-bit PCM audio from server TTS
                 if (length % 2 != 0) {
                     Serial.println("[WS] ERROR: Binary data length must be even");
                     break;
@@ -269,12 +295,20 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
                 size_t samples = length / 2;
                 int16_t* audioData = (int16_t*)payload;
                 g_audioFramesRx++;
+                g_audioBytesRx += (uint32_t)length;
+
+                unsigned long now = millis();
+                if (now - g_lastAudioRxLogMs >= 2000) {
+                    g_lastAudioRxLogMs = now;
+                    Serial.printf("[WS][AUDIO] rx frames=%lu bytes=%lu\n",
+                                  (unsigned long)g_audioFramesRx,
+                                  (unsigned long)g_audioBytesRx);
+                }
 
                 if (!g_spkBuf.push(audioData, samples)) {
                     g_audioFramesDropped++;
                     g_audioSamplesDropped += samples;
 
-                    unsigned long now = millis();
                     if (now - g_lastAudioDropLogMs >= 2000) {
                         g_lastAudioDropLogMs = now;
                         Serial.printf(

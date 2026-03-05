@@ -2,9 +2,16 @@
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 
+// g_micBuf: capture buffer, filled by mic_stream_task, consumed by mic_upload_task
+// g_spkBuf: playback buffer, filled by WebSocket RX, consumed by ws_audio_play_task
 AudioBuffer g_micBuf;
 AudioBuffer g_spkBuf;
 
+// Set true while speaker is playing; mic_upload_task discards frames to prevent echo
+volatile bool g_speakerActive = false;
+
+// Allocate ring buffer of `capacitySamples` int16_t samples
+// preferPsram=true tries SPIRAM first (for large speaker buffer); falls back to DRAM
 bool AudioBuffer::init(size_t capacitySamples, bool preferPsram) {
     if (!_mutex) {
         _mutex = xSemaphoreCreateMutex();
@@ -28,6 +35,7 @@ bool AudioBuffer::init(size_t capacitySamples, bool preferPsram) {
         _buf = static_cast<int16_t*>(heap_caps_malloc(bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     }
 
+    // Fallback: any available heap if preferred region is full
     if (!_buf) {
         _buf = static_cast<int16_t*>(heap_caps_malloc(bytes, MALLOC_CAP_8BIT));
         if (_buf) {
@@ -62,13 +70,15 @@ void AudioBuffer::clear() {
     xSemaphoreGive(_mutex);
 }
 
+// Push `samples` int16_t values into the ring buffer (mutex-protected)
+// Returns false if not enough free space (caller should log/count drops)
 bool AudioBuffer::push(const int16_t* data, size_t samples) {
     if (!_mutex || !_buf || !data || samples == 0) return false;
     xSemaphoreTake(_mutex, portMAX_DELAY);
 
     if (samples > (_capacity - _count)) {
         xSemaphoreGive(_mutex);
-        return false;
+        return false;  // buffer full — frame dropped
     }
 
     for (size_t i = 0; i < samples; i++) {
@@ -81,13 +91,15 @@ bool AudioBuffer::push(const int16_t* data, size_t samples) {
     return true;
 }
 
+// Pop exactly `samples` int16_t values from the ring buffer (mutex-protected)
+// Returns false if fewer samples are available — caller should retry next tick
 bool AudioBuffer::pop(int16_t* data, size_t samples) {
     if (!_mutex || !_buf || !data || samples == 0) return false;
     xSemaphoreTake(_mutex, portMAX_DELAY);
 
     if (_count < samples) {
         xSemaphoreGive(_mutex);
-        return false;
+        return false;  // not enough data yet
     }
 
     for (size_t i = 0; i < samples; i++) {

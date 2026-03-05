@@ -2,6 +2,7 @@
 #include "../config/pinmap.h"
 #include <driver/i2s.h>
 
+// Configure I2S_NUM_1 for MAX98357 amplifier (TX only, 16 kHz, 16-bit PCM)
 void SpeakerI2S::init() {
     i2s_config_t config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
@@ -19,13 +20,15 @@ void SpeakerI2S::init() {
         .bck_io_num = I2S_SPK_BCLK,
         .ws_io_num = I2S_SPK_WS,
         .data_out_num = I2S_SPK_DATA,
-        .data_in_num = -1
+        .data_in_num = -1            // TX only, no input pin
     };
 
     i2s_driver_install(I2S_NUM_1, &config, 0, NULL);
     i2s_set_pin(I2S_NUM_1, &pin_config);
 }
 
+// Write one frame of 16-bit PCM samples to the speaker
+// Returns false if write fails or not all bytes were consumed within 100ms timeout
 bool SpeakerI2S::write(const int16_t* samples, size_t bytes) {
     if (samples == nullptr || bytes == 0) {
         return false;
@@ -37,7 +40,7 @@ bool SpeakerI2S::write(const int16_t* samples, size_t bytes) {
         samples,
         bytes,
         &written,
-        portMAX_DELAY
+        pdMS_TO_TICKS(100)  // non-blocking with timeout to avoid stalling the task
     );
 
     return (err == ESP_OK) && (written == bytes);

@@ -3,6 +3,9 @@
 		{
 			"name": "RobotAI",
 			"path": "."
+		},
+		{
+			"path": "../../../Python/robot_AI_Brain"
 		}
 	],
 	"settings": {}

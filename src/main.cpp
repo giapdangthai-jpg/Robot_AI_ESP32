@@ -1,57 +1,24 @@
-// #include <Arduino.h>
-// #include <Adafruit_NeoPixel.h>
-
-// #define RGB_PIN 48          // WS2812 onboard ESP32-S3 thường dùng pin này
-
-// Adafruit_NeoPixel rgb(1, RGB_PIN, NEO_GRB + NEO_KHZ800);
-// void setup() {
-//   Serial.begin(115200);
-//   delay(2000);
-//   Serial.println("Robot Dog Boot OK");
-
-//   rgb.begin();
-//   rgb.setBrightness(10);   // dịu mắt
-// }
-
-// void loop() {
-//   Serial.println("Running...");
-
-//   rgb.setPixelColor(0, rgb.Color(50, 0, 0)); // đỏ
-//   rgb.show();
-//   delay(1000);
-  
-
-//   rgb.setPixelColor(0, rgb.Color(0, 50, 0)); // xanh lá
-//   rgb.show();
-//   delay(1000);
-
-//   rgb.setPixelColor(0, rgb.Color(0, 0, 50)); // xanh dương
-//   rgb.show();
-//   delay(1000);
-// }
+// ── RobotAI Entry Point ──────────────────────────────────────
+// setup(): initialize hardware and start all FreeRTOS tasks
+// loop():  minimal; all work is done by tasks (audio, WS, motor)
 
 #include <Arduino.h>
 
 #include "core/system.h"
 #include "core/event_bus.h"
 #include "motor/motor.h"
+#include "motor/motor_task.h"
 #include "network/websocket_mgr.h"
-
-
-// void startMotorTask();
-// void startWebSocketTask();
-// void startAudioTask();
 
 extern WebSocketMgr wsmgr;
 
 void setup() {
-
+    // Init Serial, I2S, WiFi, WebSocket, audio tasks, mic stream
     System::init();
     EventBus::init();
     Motor::init();
+    startMotorTask();
 
-    // startMotorTask();
-    // startAudioTask();
     delay(2000);
     Serial.println("Robot RTOS Ready");
 }
@@ -65,15 +32,15 @@ void loop() {
     //     wsmgr.sendText("Hello from ESP");
     //     lastText = millis();
     // }
+    
     delay(2000);
 
-    if (!sentHelloAudio && wsmgr.isConnected())
-    {
+    // Send test audio once after WebSocket connects
+    if (!sentHelloAudio && wsmgr.isConnected()) {
         bool ok = wsmgr.sendHelloFromGabiAudio();
         Serial.println(ok ? "[APP] Hello from gabi audio sent" : "[APP] Hello from gabi audio failed");
         sentHelloAudio = ok;
     }
 
     delay(200);
-   // vTaskDelay(1);
 }

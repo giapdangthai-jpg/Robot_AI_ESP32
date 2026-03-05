@@ -22,3 +22,6 @@ private:
 
 extern AudioBuffer g_micBuf;
 extern AudioBuffer g_spkBuf;
+
+// Set true while speaker is playing; mic_upload reads this to mute uplink
+extern volatile bool g_speakerActive;

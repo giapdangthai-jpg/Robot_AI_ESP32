@@ -50,6 +50,10 @@ void WifiMgr::connect() {
                 Serial.println(WiFi.localIP());
                 Serial.print("[WiFi] RSSI: ");
                 Serial.println(WiFi.RSSI());
+                Serial.print("[WiFi] Gateway: ");
+                Serial.println(WiFi.gatewayIP());
+                Serial.print("[WiFi] Subnet: ");
+                Serial.println(WiFi.subnetMask());
             } else {
             Serial.println();
             Serial.println("[WiFi] Failed to connect!");

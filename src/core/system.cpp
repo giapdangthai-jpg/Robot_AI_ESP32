@@ -20,15 +20,22 @@ void System::init() {
     if (!g_micBuf.init(8192, false)) {
         Serial.println("[SYS] Failed to init mic buffer");
     }
-    MicI2S::init();
-    SpeakerI2S::init();
+    MicI2S::init();       // I2S_NUM_0: INMP441 microphone
+    SpeakerI2S::init();   // I2S_NUM_1: MAX98357 amplifier
     wifi.connect();
-    wsmgr.init();       // g_spkBuf.init() được gọi bên trong
-    wsmgr.startTask();
-    startWsAudioPlayTask();
+    wsmgr.init();         // also inits g_spkBuf (32768 samples in PSRAM)
+    wsmgr.startTask();    // FreeRTOS task: WS loop + send queue on Core 0
+    startWsAudioPlayTask();  // pops g_spkBuf and writes to I2S speaker
+    startMicStream();        // captures I2S mic and uploads via WebSocket
 }
 
 void System::startMicStream() {
-    startMicTask();
-    startMicUploadTask(&wsmgr);
+    static bool started = false;
+    if (started) {
+        Serial.println("[SYS] Mic stream already started");
+        return;
+    }
+    startMicTask();              // Core 1: reads I2S, pushes to g_micBuf
+    startMicUploadTask(&wsmgr);  // Core 0: VAD + sends frames over WebSocket
+    started = true;
 }
