@@ -52,3 +52,10 @@
 // RGB LED - WS2812
 // =====================
 #define RGB_PIN 48
+
+// =====================
+// BOOT button (built-in on ESP32-S3 DevKit)
+// Hold 3s at boot to reset WiFi credentials
+// =====================
+#define BOOT_BTN_PIN  0
+#define WIFI_RESET_HOLD_MS 3000

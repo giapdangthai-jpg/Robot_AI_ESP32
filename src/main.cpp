@@ -1,6 +1,6 @@
 // ── RobotAI Entry Point ──────────────────────────────────────
 // setup(): initialize hardware and start all FreeRTOS tasks
-// loop():  minimal; all work is done by tasks (audio, WS, motor)
+// loop():  button polling + one-time test audio send
 
 #include <Arduino.h>
 
@@ -9,6 +9,9 @@
 #include "motor/motor.h"
 #include "motor/motor_task.h"
 #include "network/websocket_mgr.h"
+#include "network/wifi_mgr.h"
+#include "utils/rgb_led.h"
+#include "config/pinmap.h"
 
 extern WebSocketMgr wsmgr;
 
@@ -23,17 +26,59 @@ void setup() {
     Serial.println("Robot RTOS Ready");
 }
 
+// ── BOOT button WiFi reset ────────────────────────────────────
+// Hold BOOT (GPIO0) for 3s any time while running → erase WiFi + server
+// config → restart into setup portal.
+
+static unsigned long s_bootPressStart  = 0;
+static bool          s_bootInProgress  = false;
+// Require the button to be seen HIGH at least once before detecting a hold.
+// Prevents false-trigger when GPIO0 is already LOW at boot (strapping pin behavior).
+static bool          s_bootSeenHigh    = false;
+
+static void pollWifiResetButton() {
+    bool pressed = (digitalRead(BOOT_BTN_PIN) == LOW);
+
+    // Wait until button has been released at least once
+    if (!s_bootSeenHigh) {
+        if (!pressed) s_bootSeenHigh = true;
+        return;
+    }
+
+    if (pressed) {
+        if (!s_bootInProgress) {
+            s_bootInProgress = true;
+            s_bootPressStart = millis();
+            Serial.println("[BTN] BOOT pressed — hold 3s to reset WiFi...");
+        }
+
+        unsigned long held = millis() - s_bootPressStart;
+        // Purple blink every 300ms as progress indicator
+        bool blink = (held / 300) % 2;
+        RgbLed::setColor(blink ? 80 : 0, 0, blink ? 80 : 0);
+
+        if (held >= WIFI_RESET_HOLD_MS) {
+            Serial.println("[BTN] WiFi reset triggered!");
+            RgbLed::setRed();
+            WifiMgr::resetAndProvision();  // erases NVS + restarts (no return)
+        }
+    } else {
+        if (s_bootInProgress) {
+            s_bootInProgress = false;
+            Serial.println("[BTN] BOOT released — reset cancelled");
+            // Restore correct LED colour based on connection state
+            if (wsmgr.isConnected()) RgbLed::setBlue();
+            else                     RgbLed::setGreen();
+        }
+    }
+}
+
+// ── Main loop ─────────────────────────────────────────────────
+
 void loop() {
-    static unsigned long lastText = 0;
     static bool sentHelloAudio = false;
 
-    // if (millis() - lastText > 15000)
-    // {
-    //     wsmgr.sendText("Hello from ESP");
-    //     lastText = millis();
-    // }
-    
-    delay(2000);
+    pollWifiResetButton();
 
     // Send test audio once after WebSocket connects
     if (!sentHelloAudio && wsmgr.isConnected()) {
@@ -42,5 +87,5 @@ void loop() {
         sentHelloAudio = ok;
     }
 
-    delay(200);
+    delay(100);  // 100ms loop → button responsive, low CPU overhead
 }

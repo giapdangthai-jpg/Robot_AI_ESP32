@@ -7,6 +7,7 @@
 #include "../audio/mic_stream_task.h"
 #include "../audio/mic_upload_task.h"
 #include "../utils/audio_buffer.h"
+#include "../utils/rgb_led.h"
 #include "../config/pinmap.h"
 #include <Arduino.h>
 
@@ -16,6 +17,8 @@ WebSocketMgr wsmgr;
 void System::init() {
     Serial.begin(DEBUG_BAUD);
     delay(500);
+    RgbLed::init();           // red: no WiFi yet
+    pinMode(BOOT_BTN_PIN, INPUT_PULLUP);  // prepare for runtime hold-detection
     Serial.println("System init...");
     if (!g_micBuf.init(8192, false)) {
         Serial.println("[SYS] Failed to init mic buffer");

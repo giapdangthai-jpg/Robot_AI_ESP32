@@ -24,9 +24,7 @@ private:
     std::function<void(String)> _messageCallback = nullptr;
     static unsigned long _lastConnectAttempt;
     static const unsigned long RECONNECT_INTERVAL = 3000;
-    //static constexpr const char* WS_SERVER = "192.168.100.170";
-    static constexpr const char* WS_SERVER = "10.10.10.139"; //"192.168.100.170"
-    static constexpr int WS_PORT = 8000;
+    // Host and port are loaded at runtime from ConfigStore (NVS)
     static constexpr const char* WS_PATH = "/ws/public";
 
     static void webSocketEvent(WStype_t type, uint8_t* payload, size_t length);

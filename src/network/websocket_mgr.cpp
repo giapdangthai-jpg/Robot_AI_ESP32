@@ -4,7 +4,9 @@
 #include <ArduinoJson.h>
 #include "../ai/ai_bridge.h"
 #include "../utils/audio_buffer.h"
+#include "../utils/rgb_led.h"
 #include "../config/pinmap.h"
+#include "../config/config_store.h"
 #include "../test/hello_from_gabi_pcm.h"
 
 extern "C" {
@@ -47,11 +49,13 @@ void WebSocketMgr::init() {
     if (!g_spkBuf.init(32768, true)) {  // large buffer in PSRAM to absorb TTS bursts
         Serial.println("[WS] Failed to init speaker buffer");
     }
-    _ws.begin(WS_SERVER, WS_PORT, WS_PATH);
+    // Host and port come from NVS (set via WiFiManager portal or default)
+    Serial.printf("[WS] Connecting to %s:%d%s\n",
+                  ConfigStore::wsHost(), ConfigStore::wsPort(), WS_PATH);
+    _ws.begin(ConfigStore::wsHost(), ConfigStore::wsPort(), WS_PATH);
     _ws.onEvent(webSocketEvent);
     _ws.setReconnectInterval(RECONNECT_INTERVAL);
     _ws.enableHeartbeat(30000, 5000, 2);
-    Serial.println("[WS] Initializing WebSocket client...");
 }
 
 void WebSocketMgr::loop() {
@@ -231,9 +235,10 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
             g_audioBytesRx = 0;
             g_lastAudioDropLogMs = 0;
             g_lastAudioRxLogMs = 0;
+            RgbLed::setGreen();  // WiFi still up, WebSocket dropped
             Serial.println("[WS] Disconnected!");
             break;
-            
+
         case WStype_CONNECTED:
             g_instance->_connected = true;
             g_spkBuf.clear();              // flush stale audio from previous session
@@ -243,6 +248,7 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
             g_audioBytesRx = 0;
             g_lastAudioDropLogMs = 0;
             g_lastAudioRxLogMs = 0;
+            RgbLed::setBlue();   // WiFi + WebSocket connected
             Serial.println("[WS] Connected!");
             delay(1);
             g_instance->_ws.sendTXT(deviceInfo);  // announce device to server
@@ -338,11 +344,11 @@ void WebSocketMgr::setEventCallback(std::function<void(String)> callback) {
 
 // Public getter methods
 const char* WebSocketMgr::getServer() {
-    return WS_SERVER;
+    return ConfigStore::wsHost();
 }
 
 const int WebSocketMgr::getPort() {
-    return WS_PORT;
+    return ConfigStore::wsPort();
 }
 
 const char* WebSocketMgr::getPath() {
