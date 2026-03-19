@@ -252,6 +252,7 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
             Serial.println("[WS] Connected!");
             delay(1);
             g_instance->_ws.sendTXT(deviceInfo);  // announce device to server
+            if (g_instance->_connectCallback) g_instance->_connectCallback();
             break;
             
         case WStype_TEXT:
@@ -340,6 +341,10 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
 
 void WebSocketMgr::setEventCallback(std::function<void(String)> callback) {
     _messageCallback = callback;
+}
+
+void WebSocketMgr::setConnectCallback(std::function<void()> callback) {
+    _connectCallback = callback;
 }
 
 // Public getter methods

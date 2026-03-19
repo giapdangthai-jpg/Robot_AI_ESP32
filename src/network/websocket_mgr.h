@@ -13,6 +13,7 @@ public:
     bool sendHelloFromGabiAudio();
     bool sendBinary(const uint8_t* data, size_t len);
     void setEventCallback(std::function<void(String)> callback);
+    void setConnectCallback(std::function<void()> callback);
     void startTask();
     const char* getServer();
     const int getPort();
@@ -22,6 +23,7 @@ private:
     QueueHandle_t _sendQueue = nullptr;
     bool _connected = false;
     std::function<void(String)> _messageCallback = nullptr;
+    std::function<void()> _connectCallback = nullptr;
     static unsigned long _lastConnectAttempt;
     static const unsigned long RECONNECT_INTERVAL = 3000;
     // Host and port are loaded at runtime from ConfigStore (NVS)

@@ -1,30 +1,44 @@
 #include "speaker_i2s.h"
 #include "../config/pinmap.h"
 #include <driver/i2s.h>
+#include <Arduino.h>
+
+// ── I2S config ─────────────────────────────────────────────────────────────
+#define I2S_SPK_PORT    I2S_NUM_1
+#define DMA_BUF_COUNT   4
+#define DMA_BUF_LEN     512
+
+// ── Audio params ───────────────────────────────────────────────────────────
+#define SAMPLE_RATE 12000       // Điều chỉnh nhanh chậm của việc phát âm thanh
 
 // Configure I2S_NUM_1 for MAX98357 amplifier (TX only, 16 kHz, 16-bit PCM)
 void SpeakerI2S::init() {
     i2s_config_t config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-        .sample_rate = 16000,
+        .sample_rate = SAMPLE_RATE,
         .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
         .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
         .communication_format = I2S_COMM_FORMAT_STAND_I2S,
         .intr_alloc_flags = 0,
-        .dma_buf_count = 4,
-        .dma_buf_len = 512,
-        .use_apll = false
+        .dma_buf_count = DMA_BUF_COUNT,
+        .dma_buf_len = DMA_BUF_LEN,
+        .use_apll = false,
+        .tx_desc_auto_clear   = true,
     };
 
     i2s_pin_config_t pin_config = {
-        .bck_io_num = I2S_SPK_BCLK,
-        .ws_io_num = I2S_SPK_WS,
+        .bck_io_num = I2S_SPK_MIC_BCLK,
+        .ws_io_num = I2S_SPK_MIC_WS,
         .data_out_num = I2S_SPK_DATA,
-        .data_in_num = -1            // TX only, no input pin
+        .data_in_num = I2S_PIN_NO_CHANGE            // TX only, no input pin
     };
 
-    i2s_driver_install(I2S_NUM_1, &config, 0, NULL);
-    i2s_set_pin(I2S_NUM_1, &pin_config);
+    ESP_ERROR_CHECK(i2s_driver_install(I2S_SPK_PORT, &config, 0, NULL));
+    ESP_ERROR_CHECK(i2s_set_pin(I2S_SPK_PORT, &pin_config));
+
+    // Enable MAX98357 amplifier: SD pin HIGH = active (LOW = shutdown)
+    pinMode(I2S_SPK_SD, OUTPUT);
+    digitalWrite(I2S_SPK_SD, HIGH);
 }
 
 // Write one frame of 16-bit PCM samples to the speaker

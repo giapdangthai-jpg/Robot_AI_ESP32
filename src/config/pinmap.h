@@ -1,11 +1,13 @@
 #pragma once
 
 // =====================
-// I2S MIC - INMP441
+// I2S MIC - INMP441, AMP - MAX98357
 // =====================
-#define I2S_MIC_BCLK   4
-#define I2S_MIC_WS     5
-#define I2S_MIC_DATA   6
+#define I2S_SPK_MIC_BCLK    37
+#define I2S_SPK_MIC_WS      38
+#define I2S_SPK_DATA        36
+#define I2S_SPK_SD          21
+#define I2S_MIC_DATA        35
 
 // Audio format
 #define AUDIO_SAMPLE_RATE 16000
@@ -14,34 +16,29 @@
 #define AUDIO_FRAME_SAMPLES 320   // 20ms
 #define AUDIO_FRAME_BYTES (AUDIO_FRAME_SAMPLES * 2)
 
-
-// =====================
-// I2S AMP - MAX98357
-// =====================
-#define I2S_SPK_BCLK   7
-#define I2S_SPK_WS     8
-#define I2S_SPK_DATA   9
-
 // =====================
 // DRV8833 Motor Left
 // =====================
-#define M1_IN1  10
-#define M1_IN2  11
+#define M1_IN1  11
+#define M1_IN2  12
 
 // =====================
 // DRV8833 Motor Right
 // =====================
-#define M2_IN1  12
-#define M2_IN2  13
+#define M2_IN1  13
+#define M2_IN2  14
 // =====================
 // DRV8833 Motor Back
 // =====================
-#define M3_IN1  14
-#define M3_IN2  15
-
+#define M3_IN1  9
+#define M3_IN2  10
+// =====================
+// DRV8833 Motor FAULT
+// =====================
+#define MOTOR_FAULT  18
 // Back angle (ADC)
 // =====================
-#define BACK_ADC   1  // GPIO1 (ADC)
+#define BACK_ADC   5  // GPIO5 (ADC)
 
 // =====================
 // UART Debug

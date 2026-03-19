@@ -23,8 +23,8 @@ void System::init() {
     if (!g_micBuf.init(8192, false)) {
         Serial.println("[SYS] Failed to init mic buffer");
     }
-    MicI2S::init();       // I2S_NUM_0: INMP441 microphone
-    SpeakerI2S::init();   // I2S_NUM_1: MAX98357 amplifier
+    SpeakerI2S::init();   // I2S_NUM_1: MAX98357 amplifier — master, drives shared BCLK/WS
+    MicI2S::init();       // I2S_NUM_0: INMP441 microphone — slave, receives BCLK/WS from speaker
     wifi.connect();
     wsmgr.init();         // also inits g_spkBuf (32768 samples in PSRAM)
     wsmgr.startTask();    // FreeRTOS task: WS loop + send queue on Core 0
