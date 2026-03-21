@@ -1,6 +1,7 @@
 #include "wifi_mgr.h"
 #include "../config/config_store.h"
 #include "../utils/rgb_led.h"
+#include "../config/pinmap.h"
 #include <WiFiManager.h>
 #include <Arduino.h>
 
@@ -14,6 +15,15 @@ static constexpr const char* PROVISION_AP_NAME = "RobotAI-Setup";
 // - Subsequent boots: connects automatically using saved NVS credentials.
 // - If connection fails: re-opens SoftAP for reconfiguration.
 void WifiMgr::connect() {
+    // If BOOT button held for 1s at startup → force provisioning portal
+    if (digitalRead(BOOT_BTN_PIN) == LOW) {
+        delay(1000);
+        if (digitalRead(BOOT_BTN_PIN) == LOW) {
+            Serial.println("[WiFi] BOOT held at startup — forcing provisioning portal");
+            resetAndProvision();  // erases credentials + restarts (no return)
+        }
+    }
+
     // Load ws_host/ws_port from NVS so portal shows current values as defaults
     ConfigStore::load();
 

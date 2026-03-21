@@ -27,14 +27,23 @@ void SpeakerI2S::init() {
     };
 
     i2s_pin_config_t pin_config = {
-        .bck_io_num = I2S_SPK_MIC_BCLK,
-        .ws_io_num = I2S_SPK_MIC_WS,
+        .bck_io_num = I2S_SPK_BCLK,
+        .ws_io_num = I2S_SPK_WS,
         .data_out_num = I2S_SPK_DATA,
         .data_in_num = I2S_PIN_NO_CHANGE            // TX only, no input pin
     };
 
-    ESP_ERROR_CHECK(i2s_driver_install(I2S_SPK_PORT, &config, 0, NULL));
-    ESP_ERROR_CHECK(i2s_set_pin(I2S_SPK_PORT, &pin_config));
+    esp_err_t err = i2s_driver_install(I2S_SPK_PORT, &config, 0, NULL);
+    if (err != ESP_OK) {
+        Serial.printf("[SPK] i2s_driver_install failed: 0x%x (%s)\n", err, esp_err_to_name(err));
+        Serial.flush();
+        return;
+    }
+    err = i2s_set_pin(I2S_SPK_PORT, &pin_config);
+    if (err != ESP_OK) {
+        Serial.printf("[SPK] i2s_set_pin failed: 0x%x (%s)\n", err, esp_err_to_name(err));
+        Serial.flush();
+    }
 
     // Enable MAX98357 amplifier: SD pin HIGH = active (LOW = shutdown)
     pinMode(I2S_SPK_SD, OUTPUT);

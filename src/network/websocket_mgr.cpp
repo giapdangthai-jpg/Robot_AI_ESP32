@@ -1,5 +1,4 @@
 #include "websocket_mgr.h"
-#include <WebSocketsClient.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "../ai/ai_bridge.h"
@@ -17,7 +16,7 @@ extern "C" {
 
 // Send queue: all WS writes go through a FreeRTOS queue so that
 // ISR/tasks on any core can enqueue safely without calling WebSocketsClient directly
-#define WS_STACK_SIZE         8192
+#define WS_STACK_SIZE         16384
 #define WS_QUEUE_LEN          10    // max messages waiting to be sent
 #define WS_MSG_SIZE           768   // max payload bytes per message (covers one audio frame)
 #define WS_QUEUE_SEND_WAIT_MS 30    // max time to wait for queue space before dropping
@@ -56,10 +55,6 @@ void WebSocketMgr::init() {
     _ws.onEvent(webSocketEvent);
     _ws.setReconnectInterval(RECONNECT_INTERVAL);
     _ws.enableHeartbeat(30000, 5000, 2);
-}
-
-void WebSocketMgr::loop() {
-    _ws.loop();
 }
 
 bool WebSocketMgr::isConnected() {
@@ -160,7 +155,6 @@ bool WebSocketMgr::sendHelloFromGabiAudio()
 
 void WebSocketMgr::startTask()
 {
-    Serial.println("[WS] startTask ");
     _sendQueue = xQueueCreate(WS_QUEUE_LEN, sizeof(WsMessage));
     if (_sendQueue == nullptr) {
         Serial.println("[WS] Failed to create send queue");
@@ -184,8 +178,6 @@ void WebSocketMgr::startTask()
 // FreeRTOS task: runs WS library loop and drains the send queue every 10ms
 void WebSocketMgr::task(void* pv)
 {
-    Serial.println("[WS] Task ");
-
     WebSocketMgr* self = static_cast<WebSocketMgr*>(pv);
 
     while (true)
@@ -284,11 +276,7 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
             break;
           
         case WStype_PING:
-            Serial.println("[WS] Ping");
-            
-            break;
         case WStype_PONG:
-            Serial.println("[WS] Pong");
             break;
             
         case WStype_BIN:
@@ -339,23 +327,7 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
     }
 }
 
-void WebSocketMgr::setEventCallback(std::function<void(String)> callback) {
-    _messageCallback = callback;
-}
-
 void WebSocketMgr::setConnectCallback(std::function<void()> callback) {
     _connectCallback = callback;
 }
 
-// Public getter methods
-const char* WebSocketMgr::getServer() {
-    return ConfigStore::wsHost();
-}
-
-const int WebSocketMgr::getPort() {
-    return ConfigStore::wsPort();
-}
-
-const char* WebSocketMgr::getPath() {
-    return WS_PATH;
-}

@@ -9,6 +9,7 @@
 #include "../utils/audio_buffer.h"
 #include "../utils/rgb_led.h"
 #include "../config/pinmap.h"
+#include "../input/touch_task.h"
 #include <Arduino.h>
 
 WifiMgr wifi;
@@ -17,19 +18,25 @@ WebSocketMgr wsmgr;
 void System::init() {
     Serial.begin(DEBUG_BAUD);
     delay(500);
-    RgbLed::init();           // red: no WiFi yet
-    pinMode(BOOT_BTN_PIN, INPUT_PULLUP);  // prepare for runtime hold-detection
+    RgbLed::init();
+    pinMode(BOOT_BTN_PIN, INPUT_PULLUP);    // prepare for runtime hold-detection
     Serial.println("System init...");
+
     if (!g_micBuf.init(8192, false)) {
         Serial.println("[SYS] Failed to init mic buffer");
     }
-    SpeakerI2S::init();   // I2S_NUM_1: MAX98357 amplifier — master, drives shared BCLK/WS
-    MicI2S::init();       // I2S_NUM_0: INMP441 microphone — slave, receives BCLK/WS from speaker
+
+    // WiFi must init before I2S to avoid GDMA channel exhaustion
     wifi.connect();
-    wsmgr.init();         // also inits g_spkBuf (32768 samples in PSRAM)
-    wsmgr.startTask();    // FreeRTOS task: WS loop + send queue on Core 0
-    startWsAudioPlayTask();  // pops g_spkBuf and writes to I2S speaker
-    startMicStream();        // captures I2S mic and uploads via WebSocket
+
+    MicI2S::init();       // I2S_NUM_0: INMP441 microphone — init before speaker (GDMA ordering)
+    SpeakerI2S::init();   // I2S_NUM_1: MAX98357 amplifier
+
+    wsmgr.init();
+    wsmgr.startTask();        // FreeRTOS task: WS loop + send queue on Core 0
+    startWsAudioPlayTask();   // pops g_spkBuf and writes to I2S speaker
+    startMicStream();         // captures I2S mic and uploads via WebSocket
+    startTouchTask();         // Touch task
 }
 
 void System::startMicStream() {

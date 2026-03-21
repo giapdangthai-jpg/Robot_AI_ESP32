@@ -1,13 +1,19 @@
 #pragma once
 
 // =====================
-// I2S MIC - INMP441, AMP - MAX98357
+// I2S AMP - MAX98357
 // =====================
-#define I2S_SPK_MIC_BCLK    37
-#define I2S_SPK_MIC_WS      38
+#define I2S_SPK_WS          38
+#define I2S_SPK_BCLK        37
 #define I2S_SPK_DATA        36
 #define I2S_SPK_SD          21
-#define I2S_MIC_DATA        35
+
+// =====================
+// I2S MIC - INMP441
+// =====================
+#define I2S_MIC_WS          5
+#define I2S_MIC_BCLK        6
+#define I2S_MIC_DATA        7
 
 // Audio format
 #define AUDIO_SAMPLE_RATE 16000
@@ -38,7 +44,7 @@
 #define MOTOR_FAULT  18
 // Back angle (ADC)
 // =====================
-#define BACK_ADC   5  // GPIO5 (ADC)
+#define BACK_ADC   16  // GPIO16 (ADC)
 
 // =====================
 // UART Debug
@@ -56,3 +62,8 @@
 // =====================
 #define BOOT_BTN_PIN  0
 #define WIFI_RESET_HOLD_MS 3000
+
+// =====================
+// Touch sensor
+// =====================
+#define TOUCH_PIN     4  

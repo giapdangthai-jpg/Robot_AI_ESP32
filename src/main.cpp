@@ -22,10 +22,10 @@ void setup() {
     Motor::init();
     startMotorTask();
 
-    wsmgr.setConnectCallback([]() {
-        bool ok = wsmgr.sendHelloFromGabiAudio();
-        Serial.println(ok ? "[APP] Hello from gabi audio sent" : "[APP] Hello from gabi audio failed");
-    });
+    // wsmgr.setConnectCallback([]() {
+    //     bool ok = wsmgr.sendHelloFromGabiAudio();
+    //     Serial.println(ok ? "[APP] Hello from gabi audio sent" : "[APP] Hello from gabi audio failed");
+    // });
 
     delay(2000);
     Serial.println("Robot RTOS Ready");
