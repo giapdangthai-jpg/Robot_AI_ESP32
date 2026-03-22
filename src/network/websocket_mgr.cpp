@@ -19,7 +19,7 @@ extern "C" {
 #define WS_STACK_SIZE         16384
 #define WS_QUEUE_LEN          10    // max messages waiting to be sent
 #define WS_MSG_SIZE           768   // max payload bytes per message (covers one audio frame)
-#define WS_QUEUE_SEND_WAIT_MS 30    // max time to wait for queue space before dropping
+#define WS_QUEUE_SEND_WAIT_MS 0     // fail immediately if queue full — avoid blocking mic upload loop
 
 enum class WsMsgType : uint8_t {
     TEXT   = 0,
@@ -45,9 +45,6 @@ static unsigned long g_lastAudioRxLogMs = 0;
 void WebSocketMgr::init() {
     g_instance = this;
 
-    if (!g_spkBuf.init(32768, true)) {  // large buffer in PSRAM to absorb TTS bursts
-        Serial.println("[WS] Failed to init speaker buffer");
-    }
     // Host and port come from NVS (set via WiFiManager portal or default)
     Serial.printf("[WS] Connecting to %s:%d%s\n",
                   ConfigStore::wsHost(), ConfigStore::wsPort(), WS_PATH);

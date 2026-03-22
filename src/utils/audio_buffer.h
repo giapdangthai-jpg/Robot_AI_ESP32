@@ -7,8 +7,9 @@ class AudioBuffer {
 public:
     bool init(size_t capacitySamples = 8192, bool preferPsram = false);
     void clear();
-    bool push(const int16_t* data, size_t samples);
-    bool pop(int16_t* data, size_t samples);
+    bool   push(const int16_t* data, size_t samples);
+    bool   pop(int16_t* data, size_t samples);
+    size_t size() const { return _count; }
 
 private:
     int16_t* _buf = nullptr;

@@ -117,9 +117,14 @@ static void micUploadTask(void* pv) {
                 preRollCount = 0;
             }
         } else { // SPEAKING: send every frame; count trailing silence
-            sendFrame(mgr, frame);
-
-            if (!loud) {
+            bool sent = sendFrame(mgr, frame);
+            if (!sent) {
+                // WS queue full — abort session to avoid flooding dropped frames
+                Serial.println("[VAD] send fail — aborting speech session");
+                vadState     = VadState::IDLE;
+                silenceCount = 0;
+                preRollCount = 0;
+            } else if (!loud) {
                 if (++silenceCount >= VAD_SILENCE_FRAMES) {
                     vadState     = VadState::IDLE;
                     silenceCount = 0;

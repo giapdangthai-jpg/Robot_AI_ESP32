@@ -2,7 +2,7 @@
 
 namespace {
 // RMS energy threshold (amplitude units); tune if VAD triggers on noise or misses speech
-static constexpr int16_t kVadThreshold = 500;
+static constexpr int16_t kVadThreshold = 800;  // raised from 500 — giảm false trigger từ echo speaker
 }
 
 // Energy-based VAD: returns true if mean square energy of the frame exceeds threshold^2

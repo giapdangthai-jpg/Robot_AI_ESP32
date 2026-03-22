@@ -5,11 +5,12 @@
 
 // ── I2S config ─────────────────────────────────────────────────────────────
 #define I2S_SPK_PORT    I2S_NUM_1
-#define DMA_BUF_COUNT   4
+#define DMA_BUF_COUNT   8
 #define DMA_BUF_LEN     512
 
 // ── Audio params ───────────────────────────────────────────────────────────
-#define SAMPLE_RATE 12000       // Điều chỉnh nhanh chậm của việc phát âm thanh
+#define SAMPLE_RATE 22050       // Piper en_US-lessac-medium output rate
+#define VOLUME      20          // 0 = mute, 100 = original, >100 = amplify (may clip)
 
 // Configure I2S_NUM_1 for MAX98357 amplifier (TX only, 16 kHz, 16-bit PCM)
 void SpeakerI2S::init() {
@@ -22,7 +23,7 @@ void SpeakerI2S::init() {
         .intr_alloc_flags = 0,
         .dma_buf_count = DMA_BUF_COUNT,
         .dma_buf_len = DMA_BUF_LEN,
-        .use_apll = false,
+        .use_apll = true,         // required for accurate 22050 Hz (APB clock can't divide evenly)
         .tx_desc_auto_clear   = true,
     };
 
@@ -36,13 +37,12 @@ void SpeakerI2S::init() {
     esp_err_t err = i2s_driver_install(I2S_SPK_PORT, &config, 0, NULL);
     if (err != ESP_OK) {
         Serial.printf("[SPK] i2s_driver_install failed: 0x%x (%s)\n", err, esp_err_to_name(err));
-        Serial.flush();
         return;
     }
     err = i2s_set_pin(I2S_SPK_PORT, &pin_config);
     if (err != ESP_OK) {
         Serial.printf("[SPK] i2s_set_pin failed: 0x%x (%s)\n", err, esp_err_to_name(err));
-        Serial.flush();
+        return;
     }
 
     // Enable MAX98357 amplifier: SD pin HIGH = active (LOW = shutdown)
@@ -57,10 +57,22 @@ bool SpeakerI2S::write(const int16_t* samples, size_t bytes) {
         return false;
     }
 
+#if VOLUME != 100
+    size_t count = bytes / sizeof(int16_t);
+    int16_t scaled[count];
+    for (size_t i = 0; i < count; ++i) {
+        int32_t s = (int32_t)samples[i] * VOLUME / 100;
+        scaled[i] = (int16_t)(s > 32767 ? 32767 : s < -32768 ? -32768 : s);
+    }
+    const int16_t* out = scaled;
+#else
+    const int16_t* out = samples;
+#endif
+
     size_t written = 0;
     esp_err_t err = i2s_write(
         I2S_NUM_1,
-        samples,
+        out,
         bytes,
         &written,
         pdMS_TO_TICKS(100)  // non-blocking with timeout to avoid stalling the task

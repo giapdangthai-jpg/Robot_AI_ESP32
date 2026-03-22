@@ -2,7 +2,7 @@
 #include <Preferences.h>
 
 // Compile-time defaults (used when NVS has no saved value yet)
-static constexpr const char* DEFAULT_WS_HOST = "10.10.10.139";
+static constexpr const char* DEFAULT_WS_HOST = "192.168.100.170";
 static constexpr int         DEFAULT_WS_PORT = 8000;
 static constexpr const char* DEFAULT_WS_PATH = "/ws/public";
 

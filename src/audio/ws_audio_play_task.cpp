@@ -12,8 +12,10 @@ extern "C" {
 static constexpr uint32_t WS_AUDIO_TASK_STACK = 4096;
 static constexpr UBaseType_t WS_AUDIO_TASK_PRIO = 1;
 static constexpr BaseType_t WS_AUDIO_TASK_CORE = 0;
-static constexpr unsigned long SPK_TAIL_MS = 300; // unmute mic after 300ms silence
-static constexpr unsigned long SPK_DONE_MS = 800; // log "done" after 800ms silence (avoids false trigger on jitter)
+static constexpr unsigned long SPK_TAIL_MS = 1500; // unmute mic after 1.5s silence — covers network jitter between TTS chunks
+static constexpr unsigned long SPK_DONE_MS = 2000; // log "done" after 2s silence
+// Pre-buffer: wait until 200ms of audio is queued before starting playback to prevent underrun
+static constexpr size_t SPK_PREBUF_SAMPLES = 4410; // 200ms @ 22050 Hz
 static uint32_t g_spkWriteFails = 0;
 static uint32_t g_spkFramesPlayed = 0;
 static unsigned long g_lastSpkWriteLogMs = 0;
@@ -22,8 +24,18 @@ static unsigned long g_lastSpkPopMs = 0;
 static void wsAudioPlayTask(void* pv) {
     (void)pv;
     int16_t frame[AUDIO_FRAME_SAMPLES];
+    bool buffering = true;  // true = waiting for pre-buffer to fill
 
     while (true) {
+        // Wait for pre-buffer to fill before first frame of a new utterance
+        if (buffering) {
+            if (g_spkBuf.size() < SPK_PREBUF_SAMPLES) {
+                vTaskDelay(pdMS_TO_TICKS(5));
+                continue;
+            }
+            buffering = false;
+        }
+
         if (g_spkBuf.pop(frame, AUDIO_FRAME_SAMPLES)) {
             g_lastSpkPopMs = millis();
             g_speakerActive = true;
@@ -48,6 +60,7 @@ static void wsAudioPlayTask(void* pv) {
                               (unsigned long)g_spkWriteFails);
                 g_spkFramesPlayed = 0;
                 g_spkWriteFails   = 0;
+                buffering = true;  // re-arm pre-buffer for next utterance
             }
             vTaskDelay(pdMS_TO_TICKS(2));
         }
