@@ -14,7 +14,7 @@ static constexpr uint32_t MIC_UPLOAD_STACK = 4096;
 static constexpr UBaseType_t MIC_UPLOAD_PRIO = 1;
 static constexpr BaseType_t MIC_UPLOAD_CORE = 0;
 
-static constexpr uint8_t VAD_ONSET_FRAMES   = 2;    // 2 × 20ms = 40ms above threshold → speech start
+static constexpr uint8_t VAD_ONSET_FRAMES   = 5;    // 5 × 20ms = 100ms above threshold → speech start
 static constexpr uint8_t VAD_SILENCE_FRAMES = 20;   // 20 × 20ms = 400ms below threshold → speech end
 
 static uint32_t g_uplinkFramesSent    = 0;
@@ -57,7 +57,7 @@ static void logUplinkStats() {
 static void micUploadTask(void* pv) {
     WebSocketMgr* mgr = static_cast<WebSocketMgr*>(pv);
     int16_t frame[AUDIO_FRAME_SAMPLES];
-    int16_t preRoll[VAD_ONSET_FRAMES][AUDIO_FRAME_SAMPLES];  // sliding window before speech onset
+    static int16_t preRoll[VAD_ONSET_FRAMES][AUDIO_FRAME_SAMPLES];  // static: off stack
 
     VadState vadState  = VadState::IDLE;
     uint8_t onsetCount   = 0;
@@ -90,6 +90,11 @@ static void micUploadTask(void* pv) {
         bool loud = VAD::isSpeech(frame, AUDIO_FRAME_SAMPLES);
 
         if (vadState == VadState::IDLE) {
+            if (!loud) {
+                // Update noise floor estimate only during confirmed silence
+                VAD::updateNoiseFloor(frame, AUDIO_FRAME_SAMPLES);
+            }
+
             if (loud) {
                 // Buffer loud frames in a sliding preRoll window
                 if (preRollCount < VAD_ONSET_FRAMES) {
@@ -113,7 +118,7 @@ static void micUploadTask(void* pv) {
                     preRollCount = 0;
                 }
             } else {
-                onsetCount = 0;
+                onsetCount   = 0;
                 preRollCount = 0;
             }
         } else { // SPEAKING: send every frame; count trailing silence

@@ -1,16 +1,18 @@
 #include "speaker_i2s.h"
 #include "../config/pinmap.h"
+#include "../config/config_store.h"
 #include <driver/i2s.h>
 #include <Arduino.h>
 
 // ── I2S config ─────────────────────────────────────────────────────────────
-#define I2S_SPK_PORT    I2S_NUM_1
-#define DMA_BUF_COUNT   8
-#define DMA_BUF_LEN     512
+#define I2S_SPK_PORT  I2S_NUM_1
+#define DMA_BUF_COUNT 8
+#define DMA_BUF_LEN   512
 
 // ── Audio params ───────────────────────────────────────────────────────────
-#define SAMPLE_RATE 22050       // Piper en_US-lessac-medium output rate
-#define VOLUME      20          // 0 = mute, 100 = original, >100 = amplify (may clip)
+#define SAMPLE_RATE 22050   // Piper en_US-lessac-medium output rate
+#define VOLUME_MAX   100
+#define VOLUME_MIN   0
 
 // Configure I2S_NUM_1 for MAX98357 amplifier (TX only, 16 kHz, 16-bit PCM)
 void SpeakerI2S::init() {
@@ -57,17 +59,19 @@ bool SpeakerI2S::write(const int16_t* samples, size_t bytes) {
         return false;
     }
 
-#if VOLUME != 100
-    size_t count = bytes / sizeof(int16_t);
-    int16_t scaled[count];
-    for (size_t i = 0; i < count; ++i) {
-        int32_t s = (int32_t)samples[i] * VOLUME / 100;
-        scaled[i] = (int16_t)(s > 32767 ? 32767 : s < -32768 ? -32768 : s);
-    }
-    const int16_t* out = scaled;
-#else
+    const int vol = getVolume();
     const int16_t* out = samples;
-#endif
+    static int16_t scaled[512];  // max DMA_BUF_LEN samples
+
+    if (vol != VOLUME_MAX) {
+        size_t count = bytes / sizeof(int16_t);
+        if (count > sizeof(scaled) / sizeof(int16_t)) count = sizeof(scaled) / sizeof(int16_t);
+        for (size_t i = 0; i < count; ++i) {
+            int32_t s = (int32_t)samples[i] * vol / VOLUME_MAX;
+            scaled[i] = (int16_t)(s > 32767 ? 32767 : s < -32768 ? -32768 : s);
+        }
+        out = scaled;
+    }
 
     size_t written = 0;
     esp_err_t err = i2s_write(
@@ -75,8 +79,16 @@ bool SpeakerI2S::write(const int16_t* samples, size_t bytes) {
         out,
         bytes,
         &written,
-        pdMS_TO_TICKS(100)  // non-blocking with timeout to avoid stalling the task
+        pdMS_TO_TICKS(100)
     );
 
     return (err == ESP_OK) && (written == bytes);
+}
+
+void SpeakerI2S::setVolume(int vol) {
+    ConfigStore::saveVolume(vol);
+}
+
+int SpeakerI2S::getVolume() {
+    return ConfigStore::volume();
 }

@@ -31,12 +31,10 @@ void MicI2S::init() {
     esp_err_t err = i2s_driver_install(I2S_MIC_PORT, &config, 0, NULL);
     if (err != ESP_OK) {
         Serial.printf("[MIC] i2s_driver_install failed: 0x%x (%s)\n", err, esp_err_to_name(err));
-        Serial.flush();
         return;
     }
     err = i2s_set_pin(I2S_MIC_PORT, &pin_config);
     if (err != ESP_OK) {
         Serial.printf("[MIC] i2s_set_pin failed: 0x%x (%s)\n", err, esp_err_to_name(err));
-        Serial.flush();
     }
 }

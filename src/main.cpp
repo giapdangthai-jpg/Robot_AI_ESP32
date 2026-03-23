@@ -12,6 +12,8 @@
 #include "network/wifi_mgr.h"
 #include "utils/rgb_led.h"
 #include "config/pinmap.h"
+#include "config/config_store.h"
+#include "audio/speaker_i2s.h"
 #include "../test/hello_from_gabi_pcm.h"
 
 extern WebSocketMgr wsmgr;
@@ -126,8 +128,32 @@ static void pollSerialCommand() {
                 vTaskDelay(pdMS_TO_TICKS(5));
             }
         }
-        if (ok) ok = wsmgr.sendText("{\"type\":\"audio_end\"}");
+        if (ok) {
+            unsigned long endMs = millis();
+            while (!wsmgr.sendText("{\"type\":\"audio_end\"}")) {
+                if (millis() - endMs > kTimeoutMs) { ok = false; break; }
+                vTaskDelay(pdMS_TO_TICKS(5));
+            }
+        }
         Serial.println(ok ? "[APP] Hello from gabi sent" : "[APP] Hello from gabi FAILED");
+        return;
+    }
+
+    // Volume commands: vol+ / vol- / vol N (0–100)
+    if (cmd == "vol+") {
+        SpeakerI2S::setVolume(min(100, SpeakerI2S::getVolume() + 10));
+        Serial.printf("[VOL] %d\n", SpeakerI2S::getVolume());
+        return;
+    }
+    if (cmd == "vol-") {
+        SpeakerI2S::setVolume(max(0, SpeakerI2S::getVolume() - 10));
+        Serial.printf("[VOL] %d\n", SpeakerI2S::getVolume());
+        return;
+    }
+    if (cmd.startsWith("vol ")) {
+        int v = cmd.substring(4).toInt();
+        SpeakerI2S::setVolume(v);
+        Serial.printf("[VOL] %d\n", SpeakerI2S::getVolume());
         return;
     }
 
@@ -135,7 +161,7 @@ static void pollSerialCommand() {
         EventBus::publish({t, 0});
         Serial.printf("[TEST] cmd=%s\n", cmd.c_str());
     } else {
-        Serial.println("[TEST] unknown. use: f b l r s sit stand lie dance + - hello");
+        Serial.println("[TEST] unknown. use: f b l r s sit stand lie dance + - hello vol+ vol- vol N");
     }
 }
 

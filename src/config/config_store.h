@@ -15,4 +15,8 @@ public:
 
     // Persist ws_host and ws_port to NVS
     static void saveWs(const char* host, int port);
+
+    // Speaker volume: 0 = mute, 100 = full (persisted in NVS)
+    static int  volume();
+    static void saveVolume(int vol);
 };
