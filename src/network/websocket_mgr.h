@@ -10,7 +10,6 @@ public:
     bool sendMessage(const char* message);
     bool sendText(const char* text);
     bool sendBinary(const uint8_t* data, size_t len);
-    bool sendHelloFromGabiAudio();
     void setConnectCallback(std::function<void()> callback);
     void startTask();
 private:

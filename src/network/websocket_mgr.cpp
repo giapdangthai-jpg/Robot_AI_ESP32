@@ -6,8 +6,6 @@
 #include "../utils/rgb_led.h"
 #include "../config/pinmap.h"
 #include "../config/config_store.h"
-#include "../test/hello_from_gabi_pcm.h"
-
 extern "C" {
     #include "freertos/FreeRTOS.h"
     #include "freertos/task.h"
@@ -107,47 +105,6 @@ bool WebSocketMgr::sendBinary(const uint8_t* data, size_t len)
     memcpy(msg.data, data, len);
     BaseType_t ok = xQueueSend(_sendQueue, &msg, pdMS_TO_TICKS(WS_QUEUE_SEND_WAIT_MS));
     return ok == pdTRUE;
-}
-
-bool WebSocketMgr::sendHelloFromGabiAudio()
-{
-    if (!isConnected() || !_sendQueue) {
-        return false;
-    }
-
-    size_t offset = 0;
-    unsigned long startMs = millis();
-    const unsigned long kTimeoutMs = 8000;
-
-    while (offset < HELLO_FROM_GABI_PCM_LEN) {
-        size_t chunk = HELLO_FROM_GABI_PCM_LEN - offset;
-        if (chunk > AUDIO_FRAME_BYTES) {
-            chunk = AUDIO_FRAME_BYTES;
-        }
-
-        if (sendBinary(HELLO_FROM_GABI_PCM + offset, chunk)) {
-            offset += chunk;
-            continue;
-        }
-
-        if (millis() - startMs > kTimeoutMs) {
-            Serial.println("[WS][AUDIO] sendHelloFromGabiAudio timeout");
-            return false;
-        }
-        vTaskDelay(pdMS_TO_TICKS(5));
-    }
-
-    unsigned long endStartMs = millis();
-    while (!sendText("{\"type\":\"audio_end\"}")) {
-        if (millis() - endStartMs > kTimeoutMs) {
-            Serial.println("[WS][AUDIO] failed to queue audio_end");
-            return false;
-        }
-        vTaskDelay(pdMS_TO_TICKS(5));
-    }
-
-    Serial.printf("[WS][AUDIO] hello_from_gabi queued bytes=%u\n", (unsigned)HELLO_FROM_GABI_PCM_LEN);
-    return true;
 }
 
 void WebSocketMgr::startTask()

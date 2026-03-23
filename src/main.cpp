@@ -12,6 +12,7 @@
 #include "network/wifi_mgr.h"
 #include "utils/rgb_led.h"
 #include "config/pinmap.h"
+#include "../test/hello_from_gabi_pcm.h"
 
 extern WebSocketMgr wsmgr;
 
@@ -111,8 +112,22 @@ static void pollSerialCommand() {
     else if (cmd == "+")     t = EventType::CMD_SPEED_UP;
     else if (cmd == "-")     t = EventType::CMD_SLOW_DOWN;
     else if (cmd == "hello") {
-        bool ok = wsmgr.sendHelloFromGabiAudio();
-        Serial.println(ok ? "[APP] Hello from gabi audio sent" : "[APP] Hello from gabi audio failed");
+        size_t offset = 0;
+        const unsigned long kTimeoutMs = 8000;
+        unsigned long startMs = millis();
+        bool ok = true;
+        while (offset < HELLO_FROM_GABI_PCM_LEN) {
+            size_t chunk = min((size_t)AUDIO_FRAME_BYTES, HELLO_FROM_GABI_PCM_LEN - offset);
+            if (wsmgr.sendBinary(HELLO_FROM_GABI_PCM + offset, chunk)) {
+                offset += chunk;
+            } else if (millis() - startMs > kTimeoutMs) {
+                ok = false; break;
+            } else {
+                vTaskDelay(pdMS_TO_TICKS(5));
+            }
+        }
+        if (ok) ok = wsmgr.sendText("{\"type\":\"audio_end\"}");
+        Serial.println(ok ? "[APP] Hello from gabi sent" : "[APP] Hello from gabi FAILED");
         return;
     }
 
