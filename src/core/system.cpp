@@ -39,10 +39,12 @@ void System::init() {
     }
 
     if (!g_micBuf.init(8192, false)) {
-        Serial.println("[SYS] Failed to init mic buffer");
+        Serial.println("[SYS] FATAL: mic buffer init failed — halting");
+        while (true) { delay(1000); }  // halt: tasks must not start with a null buffer
     }
     if (!g_spkBuf.init(32768, true)) {  // PSRAM: large buffer to absorb TTS bursts
-        Serial.println("[SYS] Failed to init speaker buffer");
+        Serial.println("[SYS] FATAL: speaker buffer init failed — halting");
+        while (true) { delay(1000); }
     }
 
     // WiFi must init before I2S to avoid GDMA channel exhaustion

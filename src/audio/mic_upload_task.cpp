@@ -49,7 +49,7 @@ static void micUploadTask(void* pv) {
         if (g_speakerActive) {
             holdCount   = 0;
             calibFrames = 0;
-            AudioPreproc::reset();
+            AudioPreproc::requestReset();
             VAD::updateNoiseFloor(frame, AUDIO_FRAME_SAMPLES);  // keep floor updated
             framesDropped++;
             continue;

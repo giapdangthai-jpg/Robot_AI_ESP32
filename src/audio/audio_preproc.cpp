@@ -1,5 +1,10 @@
 #include "audio_preproc.h"
 
+// Cross-core reset flag: set by requestReset() on Core 0,
+// consumed at the top of process() on Core 1.
+// Xtensa LX7: single-byte read/write is atomic; volatile prevents caching.
+static volatile bool s_resetPending = false;
+
 namespace {
 
 // ── High-Pass Filter (Biquad, 2nd-order Butterworth) ─────────────────────────
@@ -80,8 +85,25 @@ static int32_t s_agc_gain_q8 = 8 * 256;  // start at 8× (conservative; adapts q
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+static void doReset() {
+    s_hpf_x1 = s_hpf_x2 = 0;
+    s_hpf_y1 = s_hpf_y2 = 0;
+    s_pe_x1        = 0;
+    s_agc_gain_q8  = 8 * 256;
+}
+
+void AudioPreproc::requestReset() {
+    s_resetPending = true;   // Core 0 → Core 1 signal; single-byte write is atomic on LX7
+}
+
 void AudioPreproc::process(int16_t* frame, size_t count) {
     if (!frame || count == 0) return;
+
+    // Drain pending reset request from Core 0 before touching filter state
+    if (s_resetPending) {
+        doReset();
+        s_resetPending = false;
+    }
 
     // Pass 1 — HPF (removes DC offset and low-frequency rumble below 80 Hz)
     for (size_t i = 0; i < count; ++i) {
@@ -121,9 +143,3 @@ void AudioPreproc::process(int16_t* frame, size_t count) {
     }
 }
 
-void AudioPreproc::reset() {
-    s_hpf_x1 = s_hpf_x2 = 0;
-    s_hpf_y1 = s_hpf_y2 = 0;
-    s_pe_x1   = 0;
-    s_agc_gain_q8 = 8 * 256;
-}

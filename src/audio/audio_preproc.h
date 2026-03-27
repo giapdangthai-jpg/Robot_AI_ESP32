@@ -15,11 +15,18 @@
 // AGC  — peak-follower automatic gain control.
 //        Fast attack (prevents clipping), slow release (avoids pumping).
 //        Normalises output level regardless of mic distance.
+//
+// Cross-core safety:
+//   process() runs on Core 1 (mic_task).
+//   requestReset() is safe to call from Core 0 (mic_upload_task):
+//   it sets a volatile flag; process() drains it at the next frame boundary.
+//   On Xtensa LX7 a single-byte write is atomic — volatile is sufficient.
 class AudioPreproc {
 public:
-    // Apply HPF then AGC to `frame` in-place.
+    // Apply HPF → pre-emphasis → AGC in-place. Called from Core 1.
     static void process(int16_t* frame, size_t count);
 
-    // Reset filter state (call on connection loss or speaker-active edge).
-    static void reset();
+    // Request a filter-state reset from Core 0. Thread-safe.
+    // The reset executes at the start of the next process() call on Core 1.
+    static void requestReset();
 };
