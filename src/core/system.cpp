@@ -11,6 +11,7 @@
 #include "../config/pinmap.h"
 #include "../input/touch_task.h"
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 
 WifiMgr wifi;
 WebSocketMgr wsmgr;
@@ -21,6 +22,21 @@ void System::init() {
     RgbLed::init();
     pinMode(BOOT_BTN_PIN, INPUT_PULLUP);    // prepare for runtime hold-detection
     Serial.println("System init...");
+
+    // Log PSRAM availability before buffer allocation so we can see what's there
+    {
+        size_t psramFree  = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+        size_t dramFree   = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        if (psramTotal > 0) {
+            Serial.printf("[SYS] PSRAM %u KB free / %u KB total\n",
+                          (unsigned)(psramFree / 1024),
+                          (unsigned)(psramTotal / 1024));
+        } else {
+            Serial.println("[SYS] PSRAM not detected — speaker buffer will use DRAM");
+        }
+        Serial.printf("[SYS] DRAM free: %u KB\n", (unsigned)(dramFree / 1024));
+    }
 
     if (!g_micBuf.init(8192, false)) {
         Serial.println("[SYS] Failed to init mic buffer");

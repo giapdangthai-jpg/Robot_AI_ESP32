@@ -2,16 +2,19 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// In-place audio preprocessing: HPF → AGC
+// In-place audio preprocessing: HPF → Pre-emphasis → AGC
 //
-// HPF  — first-order DC-removal / high-pass (fc ≈ 80 Hz @ 16 kHz).
-//        Removes DC offset, 50/60 Hz mains hum, and robot-body vibration
-//        before the signal reaches VAD or the server.
+// HPF  — 2nd-order Butterworth high-pass (fc = 80 Hz @ 16 kHz, Q = 0.707).
+//        Removes DC offset, 50/60 Hz hum, and robot-body vibration.
+//        -40 dB/decade roll-off vs 1st-order.
+//
+// PE   — pre-emphasis FIR: y[n] = x[n] - 0.97·x[n-1].
+//        Boosts high-frequency consonants (s, f, sh, th) to compensate for
+//        the INMP441 capsule roll-off and improve Whisper STT accuracy.
 //
 // AGC  — peak-follower automatic gain control.
 //        Fast attack (prevents clipping), slow release (avoids pumping).
-//        Replaces the fixed bit-shift gain: output level is normalised
-//        regardless of microphone placement or speaker distance.
+//        Normalises output level regardless of mic distance.
 class AudioPreproc {
 public:
     // Apply HPF then AGC to `frame` in-place.

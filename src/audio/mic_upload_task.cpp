@@ -1,6 +1,7 @@
 #include "mic_upload_task.h"
 #include <Arduino.h>
 #include "vad.h"
+#include "audio_preproc.h"
 #include "../utils/audio_buffer.h"
 #include "../config/pinmap.h"
 
@@ -42,10 +43,13 @@ static void micUploadTask(void* pv) {
             continue;
         }
 
-        // Echo suppression: mute while speaker is playing
+        // Echo suppression: mute while speaker is playing.
+        // Also reset filter state so HPF/PE transients don't contaminate
+        // the first frames after the speaker stops.
         if (g_speakerActive) {
             holdCount   = 0;
             calibFrames = 0;
+            AudioPreproc::reset();
             VAD::updateNoiseFloor(frame, AUDIO_FRAME_SAMPLES);  // keep floor updated
             framesDropped++;
             continue;
