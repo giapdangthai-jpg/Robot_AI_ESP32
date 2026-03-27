@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 #define I2S_MIC_PORT    I2S_NUM_0
-#define DMA_BUF_COUNT   4
+#define DMA_BUF_COUNT   8
 #define DMA_BUF_LEN     512
 #define MIC_SAMPLE_RATE 16000
 
@@ -18,7 +18,7 @@ void MicI2S::init() {
         .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
         .dma_buf_count = DMA_BUF_COUNT,
         .dma_buf_len = DMA_BUF_LEN,
-        .use_apll = false
+        .use_apll = true   // APLL: clock jitter <10 ppm vs ~200 ppm — better audio quality for STT
     };
 
     i2s_pin_config_t pin_config = {
