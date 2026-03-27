@@ -1,5 +1,16 @@
 🔹 config/
 
+Sau khi sửa, làm đúng 4 bước này
+1️⃣ Clean project
+pio run --target clean
+2️⃣ Upload lại
+pio run --target upload
+3️⃣ Mở monitor
+pio device monitor
+4️⃣ Nhấn RESET trên board
+
+👉 Với ESP32-S3, bước này rất quan trọng
+
 👉 KHÔNG để logic ở đây
 
 pinmap.h

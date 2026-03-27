@@ -10,7 +10,7 @@
 // GPIO1 = TOUCH_PAD_NUM1 trên ESP32-S3-DevKitC-1
 // Dùng ESP-IDF API trực tiếp — arduino touchRead() không init đúng trên ESP32-S3
 #define TOUCH_PAD       TOUCH_PAD_NUM4
-#define TOUCH_THRESHOLD 24000   // idle ~20000, touched ~24000-27000
+#define TOUCH_THRESHOLD 29000   // idle ~27000, touched ~31000
 #define DEBOUNCE_MS     400
 
 static void touchTask(void*) {

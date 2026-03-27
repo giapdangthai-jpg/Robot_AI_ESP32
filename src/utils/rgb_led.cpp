@@ -14,6 +14,7 @@ void RgbLed::init() {
 void RgbLed::setRed()   { setColor(255, 0,   0);   }
 void RgbLed::setGreen() { setColor(0,   255, 0);   }
 void RgbLed::setBlue()  { setColor(0,   0,   255); }
+void RgbLed::setOrange() { setColor(255, 80, 0);   }
 void RgbLed::off()      { setColor(0,   0,   0);   }
 
 void RgbLed::setColor(uint8_t r, uint8_t g, uint8_t b) {

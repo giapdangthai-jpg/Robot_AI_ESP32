@@ -3,6 +3,7 @@
 #include <string.h>
 #include "vad.h"
 #include "../utils/audio_buffer.h"
+#include "../utils/rgb_led.h"
 #include "../config/pinmap.h"
 
 extern "C" {
@@ -14,7 +15,7 @@ static constexpr uint32_t MIC_UPLOAD_STACK = 4096;
 static constexpr UBaseType_t MIC_UPLOAD_PRIO = 1;
 static constexpr BaseType_t MIC_UPLOAD_CORE = 0;
 
-static constexpr uint8_t VAD_ONSET_FRAMES   = 5;    // 5 × 20ms = 100ms above threshold → speech start
+static constexpr uint8_t VAD_ONSET_FRAMES   = 4;    // 4 × 20ms = 80ms above threshold → speech start
 static constexpr uint8_t VAD_SILENCE_FRAMES = 20;   // 20 × 20ms = 400ms below threshold → speech end
 
 static uint32_t g_uplinkFramesSent    = 0;
@@ -109,6 +110,7 @@ static void micUploadTask(void* pv) {
                     vadState     = VadState::SPEAKING;
                     onsetCount   = 0;
                     silenceCount = 0;
+                    RgbLed::setOrange( );  // orange = mic recording
                     Serial.println("[VAD] speech start");
 
                     // Flush preRoll so server receives audio from before onset
@@ -134,6 +136,7 @@ static void micUploadTask(void* pv) {
                     vadState     = VadState::IDLE;
                     silenceCount = 0;
                     // Signal server to run transcription immediately
+                    RgbLed::setBlue();  // restore: WebSocket connected
                     if (!mgr->sendText("{\"type\":\"audio_end\"}")) {
                         Serial.println("[VAD] failed to queue audio_end");
                     } else {

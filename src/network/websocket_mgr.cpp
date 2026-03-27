@@ -39,7 +39,8 @@ static uint32_t g_audioBytesRx = 0;
 static unsigned long g_lastAudioDropLogMs = 0;
 static unsigned long g_lastAudioRxLogMs = 0;
 // Initialize WebSocket client and speaker buffer (32768 samples in PSRAM)
-// Heartbeat: ping every 30s, pong timeout 5s, disconnect after 2 missed pongs
+// Heartbeat: ping every 120s, pong timeout 10s, disconnect after 3 missed pongs
+// (keep interval long so server LLM/TTS processing doesn't trigger spurious disconnects)
 void WebSocketMgr::init() {
     g_instance = this;
 
@@ -49,7 +50,7 @@ void WebSocketMgr::init() {
     _ws.begin(ConfigStore::wsHost(), ConfigStore::wsPort(), WS_PATH);
     _ws.onEvent(webSocketEvent);
     _ws.setReconnectInterval(RECONNECT_INTERVAL);
-    _ws.enableHeartbeat(30000, 5000, 2);
+    _ws.enableHeartbeat(120000, 10000, 3);
 }
 
 bool WebSocketMgr::isConnected() {
@@ -224,7 +225,10 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
                     AiBridge::handleAnswer(answer, userText);
                 } else {
                     const char* msgType = doc["type"].is<const char*>() ? doc["type"].as<const char*>() : "unknown";
-                    Serial.printf("[WS] Ignore text frame without usable 'text' (type=%s)\n", msgType);
+                    // Silently ignore server keepalive/status frames
+                    if (strcmp(msgType, "heartbeat") != 0 && strcmp(msgType, "thinking") != 0) {
+                        Serial.printf("[WS] Ignore text frame without usable 'text' (type=%s)\n", msgType);
+                    }
                 }
             }
             break;

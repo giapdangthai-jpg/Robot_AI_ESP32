@@ -15,12 +15,12 @@ static constexpr int64_t kAlphaNumer = 5;
 static constexpr int64_t kAlphaDenom = 100;
 
 // Speech must be at least kSpeechRatio × louder than noise floor.
-// Threshold is compared in squared domain: ratio² = 9 means 3× RMS.
-static constexpr int64_t kSpeechRatioSq = 9;   // 3²
+// Threshold is compared in squared domain: ratio² = 4 means 2× RMS.
+static constexpr int64_t kSpeechRatioSq = 7;   // ~2.45×
 
 // Hard minimum so VAD never fires on absolute silence / hardware hiss
-// (400 RMS → 400² = 160 000)
-static constexpr int64_t kMinThresholdSq = 160000LL;
+// (300 RMS → 300² = 90 000)
+static constexpr int64_t kMinThresholdSq = 122500LL;
 
 // ── Helper ──────────────────────────────────────────────────────────────────
 static int64_t computeMeanSq(const int16_t* samples, size_t count) {
