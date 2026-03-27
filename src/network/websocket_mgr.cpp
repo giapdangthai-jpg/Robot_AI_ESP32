@@ -213,22 +213,38 @@ void WebSocketMgr::webSocketEvent(WStype_t type, uint8_t* payload, size_t length
                     break;
                 }
 
-                const char* answer   = nullptr;
-                const char* userText = nullptr;
+                const char* msgType = doc["type"].is<const char*>()
+                                      ? doc["type"].as<const char*>() : "unknown";
 
-                if (doc["text"].is<const char*>())
-                    answer = doc["text"].as<const char*>();
-                if (doc["user_text"].is<const char*>())
-                    userText = doc["user_text"].as<const char*>();
+                if (strcmp(msgType, "speech_start") == 0) {
+                    // Silero VAD on server detected speech — visual feedback
+                    RgbLed::setOrange();
+                    Serial.println("[WS] speech_start");
 
-                if (answer && answer[0] != '\0') {
-                    AiBridge::handleAnswer(answer, userText);
-                } else {
-                    const char* msgType = doc["type"].is<const char*>() ? doc["type"].as<const char*>() : "unknown";
-                    // Silently ignore server keepalive/status frames
-                    if (strcmp(msgType, "heartbeat") != 0 && strcmp(msgType, "thinking") != 0) {
-                        Serial.printf("[WS] Ignore text frame without usable 'text' (type=%s)\n", msgType);
+                } else if (strcmp(msgType, "thinking") == 0) {
+                    // STT done, LLM processing — different colour so user knows robot is thinking
+                    RgbLed::setPurple();
+                    Serial.println("[WS] thinking");
+
+                } else if (strcmp(msgType, "response") == 0) {
+                    // LLM + TTS complete — pass text to AI bridge, restore idle LED
+                    const char* answer   = doc["text"].is<const char*>()
+                                          ? doc["text"].as<const char*>() : nullptr;
+                    const char* userText = doc["user_text"].is<const char*>()
+                                          ? doc["user_text"].as<const char*>() : nullptr;
+                    RgbLed::setBlue();
+                    if (answer && answer[0] != '\0') {
+                        AiBridge::handleAnswer(answer, userText);
                     }
+
+                } else if (strcmp(msgType, "heartbeat") == 0
+                        || strcmp(msgType, "device_info_ack") == 0
+                        || strcmp(msgType, "audio_end_ack") == 0) {
+                    // Silently ignore expected server status frames
+                    (void)0;
+
+                } else {
+                    Serial.printf("[WS] Unhandled message type='%s'\n", msgType);
                 }
             }
             break;

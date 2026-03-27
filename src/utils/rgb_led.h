@@ -11,8 +11,9 @@ public:
 
     static void setRed();    // no WiFi
     static void setGreen();  // WiFi connected
-    static void setBlue();   // WebSocket connected
-    static void setOrange(); // mic recording
+    static void setBlue();   // WebSocket connected, idle
+    static void setOrange(); // speech detected — server is listening
+    static void setPurple(); // thinking — STT/LLM processing
 
     static void setColor(uint8_t r, uint8_t g, uint8_t b);
     static void off();

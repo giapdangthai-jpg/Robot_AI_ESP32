@@ -2,19 +2,44 @@
 
 namespace {
 
-// ── High-Pass Filter ─────────────────────────────────────────────────────────
-// DC-removal HPF:  y[n] = x[n] - x[n-1] + R·y[n-1]
-// R = 1 - 2π·fc/fs  →  fc ≈ 80 Hz @ 16 kHz  →  R ≈ 0.9686
-// Integer approx: R = 31/32 = 0.96875  →  fc ≈ 79 Hz
-// Attenuates DC, motor vibration, and chassis resonance.
-static int32_t s_hpf_x = 0;  // x[n-1]
-static int32_t s_hpf_y = 0;  // y[n-1]
+// ── High-Pass Filter (Biquad, 2nd-order Butterworth) ─────────────────────────
+// Design: fc = 80 Hz @ fs = 16 kHz, Q = 1/√2 (maximally flat / Butterworth)
+// -40 dB/decade roll-off vs -20 dB for 1st-order — better motor vibration rejection.
+//
+// Bilinear-transform coefficients (Q14 fixed-point, scale = 2^14 = 16384):
+//   ω0 = 2π·80/16000, α = sin(ω0)/(2Q)
+//   B0 =  16026  (≈ +0.97803 · 2^14)
+//   B1 = -32053  (≈ -1.95606 · 2^14)
+//   B2 =  16026
+//   A1 =  32051  (positive: this is −a1_norm, since a1_norm ≈ −1.95596)
+//   A2 = -15673  (negative: this is −a2_norm, since a2_norm ≈ +0.95653)
+//
+// Difference equation (Direct Form I):
+//   y[n] = (B0·x[n] + B1·x1 + B2·x2 + A1·y1 + A2·y2) >> 14
+//
+// All intermediate arithmetic uses int64 to prevent overflow.
+
+static constexpr int32_t HPF_B0 =  16026;
+static constexpr int32_t HPF_B1 = -32053;
+static constexpr int32_t HPF_B2 =  16026;
+static constexpr int32_t HPF_A1 =  32051;  // = -a1_norm * 2^14
+static constexpr int32_t HPF_A2 = -15673;  // = -a2_norm * 2^14
+
+static int32_t s_hpf_x1 = 0, s_hpf_x2 = 0;  // x[n-1], x[n-2]
+static int32_t s_hpf_y1 = 0, s_hpf_y2 = 0;  // y[n-1], y[n-2]
 
 static inline int16_t hpf_sample(int16_t xn) {
-    int32_t yn = (int32_t)xn - s_hpf_x + (s_hpf_y * 31) / 32;
-    s_hpf_x = xn;
-    s_hpf_y = yn;
-    return yn > 32767 ? 32767 : (yn < -32768 ? -32768 : (int16_t)yn);
+    int64_t acc = (int64_t)HPF_B0 * xn
+                + (int64_t)HPF_B1 * s_hpf_x1
+                + (int64_t)HPF_B2 * s_hpf_x2
+                + (int64_t)HPF_A1 * s_hpf_y1
+                + (int64_t)HPF_A2 * s_hpf_y2;
+    int32_t yn = (int32_t)(acc >> 14);
+    if (yn >  32767) yn =  32767;
+    if (yn < -32768) yn = -32768;
+    s_hpf_x2 = s_hpf_x1;  s_hpf_x1 = xn;
+    s_hpf_y2 = s_hpf_y1;  s_hpf_y1 = yn;
+    return (int16_t)yn;
 }
 
 // ── Automatic Gain Control ────────────────────────────────────────────────────
@@ -72,7 +97,7 @@ void AudioPreproc::process(int16_t* frame, size_t count) {
 }
 
 void AudioPreproc::reset() {
-    s_hpf_x      = 0;
-    s_hpf_y      = 0;
+    s_hpf_x1 = s_hpf_x2 = 0;
+    s_hpf_y1 = s_hpf_y2 = 0;
     s_agc_gain_q8 = 8 * 256;
 }
